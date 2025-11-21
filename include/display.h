@@ -11,7 +11,7 @@
 
 
 /*
-Potential Structures for ncurses
+Potential Structures for ncurse
 */
 
 /*Initialize everything ncurses requires*/
