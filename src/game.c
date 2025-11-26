@@ -3,12 +3,13 @@
 #include <stdlib.h>
 #include <time.h>
 #include <unistd.h>
+#include <sys/types.h>
+#include <sys/wait.h>
 
 #define CONTINUE_PLAY 0
 #define NEXT_LEVEL 1
 #define QUIT_GAME 2
-#define LOAD_BACKUP 3
-#define CREATE_BACKUP 4
+#define SAVE_STATE 3
 
 void screen_refresh(board_t * game_board, int mode) {
     debug("REFRESH\n");
@@ -41,6 +42,10 @@ int play_board(board_t * game_board) {
 
     if (play->command == 'Q') {
         return QUIT_GAME;
+    }
+
+    if (play->command == 'G') {
+        return SAVE_STATE;
     }
 
     int result = move_pacman(game_board, 0, play);
@@ -89,6 +94,8 @@ int main(int argc, char** argv) {
         draw_board(&game_board, DRAW_MENU);
         refresh_screen();
 
+        bool is_child_process = false;
+
         while(true) {
             int result = play_board(&game_board); 
 
@@ -98,9 +105,35 @@ int main(int argc, char** argv) {
                 break;
             }
 
+            if(result == SAVE_STATE && !is_child_process) {
+                pid_t pid = fork();
+                
+                if (pid == 0) {
+                    is_child_process = true; //continua o jogo
+
+                } else if (pid > 0) {
+                    int status;
+                    waitpid(pid, &status, 0); //mete em wait enquanto o filho está nos works
+                    
+                    terminal_cleanup(); //limpa tabuleiro atual
+                    terminal_init(); //inicia um novo
+                    
+                    draw_board(&game_board, DRAW_MENU); //refazer o tabuleiro
+                    refresh_screen(); //mostrar cenas no ecrã
+                }
+            }
+
             if(result == QUIT_GAME) {
-                screen_refresh(&game_board, DRAW_GAME_OVER); 
+                screen_refresh(&game_board, DRAW_GAME_OVER);
                 sleep_ms(game_board.tempo);
+                
+                if (is_child_process) {
+                    unload_level(&game_board);
+                    terminal_cleanup();
+                    close_debug_file();
+                    exit(0);
+                }
+                
                 end_game = true;
                 break;
             }

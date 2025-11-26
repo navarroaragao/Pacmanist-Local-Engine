@@ -1,0 +1,8 @@
+# Compiled object files
+obj/
+
+# Executable binary
+bin/
+
+# Debug log files
+*.log
