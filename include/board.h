@@ -1,6 +1,9 @@
 #ifndef BOARD_H
 #define BOARD_H
 
+#include <pthread.h>
+#include <stdbool.h>
+
 #define MAX_MOVES 20
 #define MAX_LEVELS 20
 #define MAX_FILENAME 256
@@ -44,6 +47,7 @@ typedef struct {
     char content;   // stuff like 'P' for pacman 'M' for monster/ghost and 'W' for wall
     int has_dot;    // whether there is a dot in this position or not
     int has_portal; // whether there is a portal in this position or not
+    pthread_mutex_t pos_mutex; // Mutex for this specific position
 } board_pos_t;
 
 typedef struct {
@@ -57,6 +61,12 @@ typedef struct {
     char pacman_file[256];  // file with pacman movements
     char ghosts_files[MAX_GHOSTS][256]; // files with monster movements
     int tempo;              // Duration of each play
+    
+    // Thread synchronization
+    pthread_mutex_t display_mutex; // Protects ncurses access only
+    volatile bool game_running;    // Flag to stop all threads
+    volatile bool level_complete;  // Flag when level is done
+    volatile int game_result;      // CONTINUE_PLAY, NEXT_LEVEL, QUIT_GAME, SAVE_STATE
 } board_t;
 
 /*Makes the current thread sleep for 'int milliseconds' miliseconds*/

@@ -5,7 +5,7 @@ POS 1 1
 # Caminho ate ao portal
 D
 T 2
-D
+R
 D
 D
 D

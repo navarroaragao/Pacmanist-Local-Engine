@@ -98,22 +98,45 @@ int move_pacman(board_t* board, int pacman_index, command_t* command) {
 
     int new_index = get_board_index(board, new_x, new_y);
     int old_index = get_board_index(board, pac->pos_x, pac->pos_y);
+    
+    // Lock positions in order to prevent deadlocks
+    int first_idx = (old_index < new_index) ? old_index : new_index;
+    int second_idx = (old_index < new_index) ? new_index : old_index;
+    
+    pthread_mutex_lock(&board->board[first_idx].pos_mutex);
+    if (first_idx != second_idx) {
+        pthread_mutex_lock(&board->board[second_idx].pos_mutex);
+    }
+    
     char target_content = board->board[new_index].content;
 
     if (board->board[new_index].has_portal) {
         board->board[old_index].content = ' ';
         board->board[new_index].content = 'P';
+        
+        if (first_idx != second_idx) {
+            pthread_mutex_unlock(&board->board[second_idx].pos_mutex);
+        }
+        pthread_mutex_unlock(&board->board[first_idx].pos_mutex);
         return REACHED_PORTAL;
     }
 
     // Check for walls
     if (target_content == 'W') {
+        if (first_idx != second_idx) {
+            pthread_mutex_unlock(&board->board[second_idx].pos_mutex);
+        }
+        pthread_mutex_unlock(&board->board[first_idx].pos_mutex);
         return INVALID_MOVE;
     }
 
     // Check for ghosts
     if (target_content == 'M') {
         kill_pacman(board, pacman_index);
+        if (first_idx != second_idx) {
+            pthread_mutex_unlock(&board->board[second_idx].pos_mutex);
+        }
+        pthread_mutex_unlock(&board->board[first_idx].pos_mutex);
         return DEAD_PACMAN;
     }
 
@@ -128,6 +151,10 @@ int move_pacman(board_t* board, int pacman_index, command_t* command) {
     pac->pos_y = new_y;
     board->board[new_index].content = 'P';
 
+    if (first_idx != second_idx) {
+        pthread_mutex_unlock(&board->board[second_idx].pos_mutex);
+    }
+    pthread_mutex_unlock(&board->board[first_idx].pos_mutex);
     return VALID_MOVE;
 }
 
@@ -295,10 +322,24 @@ int move_ghost(board_t* board, int ghost_index, command_t* command) {
     // Check board position
     int new_index = get_board_index(board, new_x, new_y);
     int old_index = get_board_index(board, ghost->pos_x, ghost->pos_y);
+    
+    // Lock positions in order to prevent deadlocks
+    int first_idx = (old_index < new_index) ? old_index : new_index;
+    int second_idx = (old_index < new_index) ? new_index : old_index;
+    
+    pthread_mutex_lock(&board->board[first_idx].pos_mutex);
+    if (first_idx != second_idx) {
+        pthread_mutex_lock(&board->board[second_idx].pos_mutex);
+    }
+    
     char target_content = board->board[new_index].content;
 
     // Check for walls and ghosts
     if (target_content == 'W' || target_content == 'M') {
+        if (first_idx != second_idx) {
+            pthread_mutex_unlock(&board->board[second_idx].pos_mutex);
+        }
+        pthread_mutex_unlock(&board->board[first_idx].pos_mutex);
         return INVALID_MOVE;
     }
 
@@ -317,6 +358,11 @@ int move_ghost(board_t* board, int ghost_index, command_t* command) {
 
     // Update board - set new position
     board->board[new_index].content = 'M';
+    
+    if (first_idx != second_idx) {
+        pthread_mutex_unlock(&board->board[second_idx].pos_mutex);
+    }
+    pthread_mutex_unlock(&board->board[first_idx].pos_mutex);
     return result;
 }
 
@@ -479,6 +525,10 @@ int parse_level_file(board_t* board, const char* level_dir) {
                         }
                         width_cache = board->width;
                         board->board = calloc(board->width * board->height, sizeof(board_pos_t));
+                        // Initialize mutex for each position
+                        for (int i = 0; i < board->width * board->height; i++) {
+                            pthread_mutex_init(&board->board[i].pos_mutex, NULL);
+                        }
                         has_dim = 1;
                     } else if (strncmp(line_buffer, "TEMPO ", 6) == 0 && !has_tempo) {
                         sscanf(line_buffer, "TEMPO %d", &board->tempo);
@@ -551,6 +601,12 @@ int parse_level_file(board_t* board, const char* level_dir) {
 }
 
 int load_level(board_t *board, int points, const char* level_dir) {
+    // Initialize sync structures
+    pthread_mutex_init(&board->display_mutex, NULL);
+    board->game_running = true;
+    board->level_complete = false;
+    board->game_result = 0; // CONTINUE_PLAY
+    
     // Allocate initial structures
     board->n_pacmans = 1;
     board->pacmans = calloc(board->n_pacmans, sizeof(pacman_t));
@@ -572,6 +628,7 @@ int load_level(board_t *board, int points, const char* level_dir) {
         for (int i = 0; i < board->height; i++) {
             for (int j = 0; j < board->width; j++) {
                 int idx = i * board->width + j;
+                pthread_mutex_init(&board->board[idx].pos_mutex, NULL);
                 if (i == 0 || i == board->height - 1 || j == 0 || j == board->width - 1) {
                     board->board[idx].content = 'W';
                     board->board[idx].has_dot = 0;
@@ -672,6 +729,11 @@ int load_level(board_t *board, int points, const char* level_dir) {
 }
 
 void unload_level(board_t * board) {
+    // Destroy mutexes for all positions
+    for (int i = 0; i < board->width * board->height; i++) {
+        pthread_mutex_destroy(&board->board[i].pos_mutex);
+    }
+    pthread_mutex_destroy(&board->display_mutex);
     free(board->board);
     free(board->pacmans);
     free(board->ghosts);

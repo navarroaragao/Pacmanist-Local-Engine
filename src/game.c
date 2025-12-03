@@ -7,81 +7,212 @@
 #include <sys/wait.h>
 #include <string.h>
 #include <dirent.h>
+#include <pthread.h>
 
 #define CONTINUE_PLAY 0
 #define NEXT_LEVEL 1
 #define QUIT_GAME 2
 #define SAVE_STATE 3
 
+// Thread argument structure
+typedef struct {
+    board_t* board;
+    int character_index;
+} thread_arg_t;
+
+// Pacman thread function
+void* pacman_thread(void* arg) {
+    thread_arg_t* targ = (thread_arg_t*)arg;
+    board_t* board = targ->board;
+    int pac_index = targ->character_index;
+    free(targ);
+    
+    pacman_t* pacman = &board->pacmans[pac_index];
+    
+    while (board->game_running) {
+        if (!pacman->alive || board->level_complete) {
+            break;
+        }
+        
+        // File-controlled movement only
+        command_t* play = &pacman->moves[pacman->current_move % pacman->n_moves];
+        
+        int result = move_pacman(board, pac_index, play);
+        
+        if (result == REACHED_PORTAL) {
+            board->game_result = NEXT_LEVEL;
+            board->level_complete = true;
+            board->game_running = false;
+        } else if (result == DEAD_PACMAN) {
+            board->game_result = QUIT_GAME;
+            board->level_complete = true;
+            board->game_running = false;
+        }
+        
+        if (board->tempo > 0) {
+            sleep_ms(board->tempo);
+        } else {
+            sleep_ms(50);
+        }
+    }
+    
+    return NULL;
+}
+
+// Ghost thread function
+void* ghost_thread(void* arg) {
+    thread_arg_t* targ = (thread_arg_t*)arg;
+    board_t* board = targ->board;
+    int ghost_index = targ->character_index;
+    free(targ);
+    
+    ghost_t* ghost = &board->ghosts[ghost_index];
+    
+    while (board->game_running) {
+        if (board->level_complete) {
+            break;
+        }
+        
+        command_t* cmd = &ghost->moves[ghost->current_move % ghost->n_moves];
+        move_ghost(board, ghost_index, cmd);
+        
+        // Check if pacman died
+        if (!board->pacmans[0].alive) {
+            board->game_result = QUIT_GAME;
+            board->level_complete = true;
+            board->game_running = false;
+        }
+        
+        if (board->tempo > 0) {
+            sleep_ms(board->tempo);
+        } else {
+            sleep_ms(50);
+        }
+    }
+    
+    return NULL;
+}
+
+// Display thread function
+void* display_thread(void* arg) {
+    board_t* board = (board_t*)arg;
+    
+    while (board->game_running) {
+        pthread_mutex_lock(&board->display_mutex);
+        
+        draw_board(board, DRAW_MENU);
+        refresh_screen();
+        
+        pthread_mutex_unlock(&board->display_mutex);
+        
+        if (board->tempo > 0) {
+            sleep_ms(board->tempo);
+        } else {
+            sleep_ms(50); // Default refresh rate
+        }
+    }
+    
+    return NULL;
+}
+
+// Input thread function (for user-controlled pacman and Q/G commands)
+void* input_thread(void* arg) {
+    board_t* board = (board_t*)arg;
+    pacman_t* pacman = &board->pacmans[0];
+    
+    while (board->game_running) {
+        char input = get_input();
+        
+        if (input == 'Q') {
+            board->game_result = QUIT_GAME;
+            board->level_complete = true;
+            board->game_running = false;
+            break;
+        }
+        
+        if (input == 'G') {
+            board->game_result = SAVE_STATE;
+            board->level_complete = true;
+            board->game_running = false;
+            break;
+        }
+        
+        // Handle user-controlled pacman movement
+        if (pacman->n_moves == 0 && input != '\0') {
+            command_t user_cmd;
+            user_cmd.command = input;
+            user_cmd.turns = 1;
+            user_cmd.turns_left = 1;
+            
+            int result = move_pacman(board, 0, &user_cmd);
+            
+            if (result == REACHED_PORTAL) {
+                board->game_result = NEXT_LEVEL;
+                board->level_complete = true;
+                board->game_running = false;
+            } else if (result == DEAD_PACMAN) {
+                board->game_result = QUIT_GAME;
+                board->level_complete = true;
+                board->game_running = false;
+            }
+        }
+        
+        sleep_ms(50); // Poll input every 50ms
+    }
+    
+    return NULL;
+}
+
 void screen_refresh(board_t * game_board, int mode) {
     debug("REFRESH\n");
+    pthread_mutex_lock(&game_board->display_mutex);
     draw_board(game_board, mode);
     refresh_screen();
+    pthread_mutex_unlock(&game_board->display_mutex);
     if(game_board->tempo != 0)
         sleep_ms(game_board->tempo);       
 }
 
 int play_board(board_t * game_board) {
-    pacman_t* pacman = &game_board->pacmans[0];
-    command_t* play;
-    command_t user_cmd;
+    // Create threads for each character
+    pthread_t display_tid, input_tid, pacman_tid;
+    pthread_t ghost_tids[MAX_GHOSTS];
     
-    // Always check for user input (G and Q commands)
-    user_cmd.command = get_input();
+    // Start display thread
+    pthread_create(&display_tid, NULL, display_thread, game_board);
     
-    if (user_cmd.command == 'Q') {
-        return QUIT_GAME;
+    // Start input thread
+    pthread_create(&input_tid, NULL, input_thread, game_board);
+    
+    // Start pacman thread (only if file-controlled)
+    if (game_board->pacmans[0].n_moves > 0) {
+        thread_arg_t* arg = malloc(sizeof(thread_arg_t));
+        arg->board = game_board;
+        arg->character_index = 0;
+        pthread_create(&pacman_tid, NULL, pacman_thread, arg);
     }
     
-    if (user_cmd.command == 'G') {
-        return SAVE_STATE;
+    // Start ghost threads
+    for (int i = 0; i < game_board->n_ghosts; i++) {
+        thread_arg_t* arg = malloc(sizeof(thread_arg_t));
+        arg->board = game_board;
+        arg->character_index = i;
+        pthread_create(&ghost_tids[i], NULL, ghost_thread, arg);
     }
     
-    if (pacman->n_moves == 0) { // if is user input controlled
-        if(user_cmd.command == '\0')
-            return CONTINUE_PLAY;
-
-        user_cmd.turns = 1;
-        play = &user_cmd;
-    }
-    else { // else if the moves are pre-defined in the file
-        // avoid buffer overflow wrapping around with modulo of n_moves
-        // this ensures that we always access a valid move for the pacman
-        play = &pacman->moves[pacman->current_move%pacman->n_moves];
-    }
-
-    debug("KEY %c\n", play->command);
-
-    if (play->command == 'Q') {
-        return QUIT_GAME;
-    }
-
-    if (play->command == 'G') {
-        return SAVE_STATE;
-    }
-
-    int result = move_pacman(game_board, 0, play);
-    if (result == REACHED_PORTAL) {
-        // Next level
-        return NEXT_LEVEL;
-    }
-
-    if(result == DEAD_PACMAN) {
-        return QUIT_GAME;
+    // Wait for all threads to finish
+    pthread_join(input_tid, NULL);
+    pthread_join(display_tid, NULL);
+    
+    if (game_board->pacmans[0].n_moves > 0) {
+        pthread_join(pacman_tid, NULL);
     }
     
     for (int i = 0; i < game_board->n_ghosts; i++) {
-        ghost_t* ghost = &game_board->ghosts[i];
-        // avoid buffer overflow wrapping around with modulo of n_moves
-        // this ensures that we always access a valid move for the ghost
-        move_ghost(game_board, i, &ghost->moves[ghost->current_move%ghost->n_moves]);
+        pthread_join(ghost_tids[i], NULL);
     }
-
-    if (!game_board->pacmans[0].alive) {
-        return QUIT_GAME;
-    }      
-
-    return CONTINUE_PLAY;  
+    
+    return game_board->game_result;
 }
 
 int main(int argc, char** argv) {
@@ -139,8 +270,11 @@ int main(int argc, char** argv) {
             debug("Failed to load level %s\n", level_files[current_level_index]);
             break;
         }
+        
+        pthread_mutex_lock(&game_board.display_mutex);
         draw_board(&game_board, DRAW_MENU);
         refresh_screen();
+        pthread_mutex_unlock(&game_board.display_mutex);
 
         bool is_child_process = false;
 
@@ -158,17 +292,30 @@ int main(int argc, char** argv) {
                 pid_t pid = fork();
                 
                 if (pid == 0) {
-                    is_child_process = true; //continua o jogo
+                    is_child_process = true;
+                    // Child continues playing - reset game state
+                    game_board.game_running = true;
+                    game_board.level_complete = false;
+                    game_board.game_result = CONTINUE_PLAY;
+                    continue; // Continue the game loop
 
                 } else if (pid > 0) {
                     int status;
-                    waitpid(pid, &status, 0); //mete em wait enquanto o filho está nos works
+                    waitpid(pid, &status, 0);
                     
-                    terminal_cleanup(); //limpa tabuleiro atual
-                    terminal_init(); //inicia um novo
+                    terminal_cleanup();
+                    terminal_init();
                     
-                    draw_board(&game_board, DRAW_MENU); //refazer o tabuleiro
-                    refresh_screen(); //mostrar cenas no ecrã
+                    pthread_mutex_lock(&game_board.display_mutex);
+                    draw_board(&game_board, DRAW_MENU);
+                    refresh_screen();
+                    pthread_mutex_unlock(&game_board.display_mutex);
+                    
+                    // Parent resets and continues
+                    game_board.game_running = true;
+                    game_board.level_complete = false;
+                    game_board.game_result = CONTINUE_PLAY;
+                    continue;
                 }
             }
 

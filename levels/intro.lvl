@@ -4,14 +4,14 @@ DIM 8 10
 # TEMPO: duracao de cada jogada em milissegundos
 TEMPO 150
 # PAC: ficheiro de comportamento do Pacman (deixar vazio para controlo manual)
-PAC 1.p
+PAC
 # MON: ficheiros de comportamento dos monstros
 MON 1.m 2.m
 # Matriz do jogo: X=parede, o=ponto, @=portal
 XXXXXXXXXX
 XooooooooX
 XoXXXXXooX
-XoXoooXooX
+XoXooooooX
 XoXoXoXooX
 XoooXooo@X
 XooooooooX
