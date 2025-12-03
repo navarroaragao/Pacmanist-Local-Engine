@@ -4,6 +4,9 @@
 #include <time.h>
 #include <unistd.h>
 #include <stdarg.h>
+#include <fcntl.h>
+#include <string.h>
+#include <sys/stat.h>
 
 FILE * debugfile;
 
@@ -375,38 +378,297 @@ int load_ghost(board_t* board) {
     return 0;
 }
 
-int load_level(board_t *board, int points) {
-    board->height = 5;
-    board->width = 10;
-    board->tempo = 10;
+// Parse behavior file for Pacman or Monster
+int parse_behavior_file(const char* filename, command_t* moves, int* n_moves, int* passo) {
+    int fd = open(filename, O_RDONLY);
+    if (fd == -1) {
+        debug("Failed to open behavior file: %s\n", filename);
+        return -1;
+    }
 
-    board->n_ghosts = 2;
+    char buffer[4096];
+    ssize_t bytes_read = read(fd, buffer, sizeof(buffer) - 1);
+    if (bytes_read <= 0) {
+        close(fd);
+        return -1;
+    }
+    buffer[bytes_read] = '\0';
+    close(fd);
+
+    char* line = buffer;
+    char* next_line;
+    int move_count = 0;
+    int has_passo = 0, has_pos = 0;
+
+    while ((next_line = strchr(line, '\n')) != NULL) {
+        *next_line = '\0';
+        
+        // Skip comments and empty lines
+        if (line[0] == '#' || line[0] == '\0') {
+            line = next_line + 1;
+            continue;
+        }
+
+        // Parse based on keyword, not line number
+        if (strncmp(line, "PASSO", 5) == 0 && !has_passo) {
+            if (sscanf(line, "PASSO %d", passo) != 1) {
+                *passo = 0;
+            }
+            debug("Read PASSO: %d from file: %s\n", *passo, filename);
+            has_passo = 1;
+        } else if (strncmp(line, "POS", 3) == 0 && !has_pos) {
+            // Position is read elsewhere, just mark as seen
+            debug("Found POS line in file: %s\n", filename);
+            has_pos = 1;
+        } else if (has_passo && has_pos) {
+            // Movement commands - only parse after PASSO and POS
+            char cmd;
+            int turns;
+            if (sscanf(line, "%c %d", &cmd, &turns) == 2) {
+                if (move_count < MAX_MOVES) {
+                    moves[move_count].command = cmd;
+                    moves[move_count].turns = turns;
+                    moves[move_count].turns_left = turns;
+                    move_count++;
+                }
+            } else if (sscanf(line, "%c", &cmd) == 1) {
+                if (move_count < MAX_MOVES) {
+                    moves[move_count].command = cmd;
+                    moves[move_count].turns = 1;
+                    moves[move_count].turns_left = 1;
+                    move_count++;
+                }
+            }
+        }
+        
+        line = next_line + 1;
+    }
+
+    *n_moves = move_count;
+    return 0;
+}
+
+// Parse level file and load the board
+int parse_level_file(board_t* board, const char* level_dir) {
+    char filepath[512];
+    snprintf(filepath, sizeof(filepath), "%s/%s", level_dir, board->level_name);
+
+    int fd = open(filepath, O_RDONLY);
+    if (fd == -1) {
+        debug("Failed to open level file: %s\n", filepath);
+        return -1;
+    }
+
+    char buffer[8192];
+    ssize_t bytes_read = read(fd, buffer, sizeof(buffer) - 1);
+    if (bytes_read <= 0) {
+        close(fd);
+        return -1;
+    }
+    buffer[bytes_read] = '\0';
+    close(fd);
+
+    char* line = buffer;
+    char* next_line;
+    int board_line = 0;
+    int has_dim = 0, has_tempo = 0, has_pac = 0, has_mon = 0;
+
+    // Parse file line by line
+    while ((next_line = strchr(line, '\n')) != NULL) {
+        *next_line = '\0';
+        
+        // Skip comments and empty lines
+        if (line[0] == '#' || line[0] == '\0') {
+            line = next_line + 1;
+            continue;
+        }
+
+        // Parse based on keyword, not line number
+        if (strncmp(line, "DIM ", 4) == 0 && !has_dim) {
+            if (sscanf(line, "DIM %d %d", &board->height, &board->width) != 2) {
+                return -1;
+            }
+            board->board = calloc(board->width * board->height, sizeof(board_pos_t));
+            has_dim = 1;
+        } else if (strncmp(line, "TEMPO ", 6) == 0 && !has_tempo) {
+            sscanf(line, "TEMPO %d", &board->tempo);
+            has_tempo = 1;
+        } else if (strncmp(line, "PAC", 3) == 0 && !has_pac) {
+            char pac_file[128];
+            if (sscanf(line, "PAC %127s", pac_file) == 1) {
+                snprintf(board->pacman_file, sizeof(board->pacman_file), "%s/%s", level_dir, pac_file);
+            } else {
+                board->pacman_file[0] = '\0'; // No file = user controlled
+            }
+            has_pac = 1;
+        } else if (strncmp(line, "MON", 3) == 0 && !has_mon) {
+            char* mon_start = strchr(line, ' ');
+            if (mon_start) {
+                mon_start++;
+                board->n_ghosts = 0;
+                char mon_file[128];
+                char line_copy[512];
+                strncpy(line_copy, mon_start, sizeof(line_copy) - 1);
+                line_copy[sizeof(line_copy) - 1] = '\0';
+                char* token = strtok(line_copy, " ");
+                while (token && board->n_ghosts < MAX_GHOSTS) {
+                    strncpy(mon_file, token, sizeof(mon_file) - 1);
+                    mon_file[sizeof(mon_file) - 1] = '\0';
+                    snprintf(board->ghosts_files[board->n_ghosts], sizeof(board->ghosts_files[0]), "%s/%s", level_dir, mon_file);
+                    board->n_ghosts++;
+                    token = strtok(NULL, " ");
+                }
+            }
+            has_mon = 1;
+        } else if (has_dim && has_tempo && has_pac && has_mon) {
+            // Board content - only parse after all headers are read
+            if (board_line < board->height) {
+                for (int x = 0; x < board->width && line[x] != '\0'; x++) {
+                    int idx = board_line * board->width + x;
+                    char c = line[x];
+                    
+                    if (c == 'X') {
+                        board->board[idx].content = 'W';
+                        board->board[idx].has_dot = 0;
+                    } else if (c == 'o') {
+                        board->board[idx].content = ' ';
+                        board->board[idx].has_dot = 1;
+                    } else if (c == '@') {
+                        board->board[idx].content = ' ';
+                        board->board[idx].has_portal = 1;
+                        board->board[idx].has_dot = 0;
+                    } else {
+                        board->board[idx].content = ' ';
+                        board->board[idx].has_dot = 0;
+                    }
+                }
+                board_line++;
+            }
+        }
+        
+        line = next_line + 1;
+    }
+
+    return 0;
+}
+
+int load_level(board_t *board, int points, const char* level_dir) {
+    // Allocate initial structures
     board->n_pacmans = 1;
-
-    board->board = calloc(board->width * board->height, sizeof(board_pos_t));
     board->pacmans = calloc(board->n_pacmans, sizeof(pacman_t));
+    
+    // Try to parse level file
+    if (parse_level_file(board, level_dir) != 0) {
+        debug("Failed to parse level file, loading static level\n");
+        
+        // Fallback to static 6x6 level
+        board->height = 6;
+        board->width = 6;
+        board->tempo = 100;
+        board->n_ghosts = 2;
+        board->board = calloc(board->width * board->height, sizeof(board_pos_t));
+        board->ghosts = calloc(board->n_ghosts, sizeof(ghost_t));
+        board->pacman_file[0] = '\0';
+        
+        // Build static board
+        for (int i = 0; i < board->height; i++) {
+            for (int j = 0; j < board->width; j++) {
+                int idx = i * board->width + j;
+                if (i == 0 || i == board->height - 1 || j == 0 || j == board->width - 1) {
+                    board->board[idx].content = 'W';
+                    board->board[idx].has_dot = 0;
+                } else if (i == board->height - 2 && j == board->width - 2) {
+                    board->board[idx].content = ' ';
+                    board->board[idx].has_portal = 1;
+                    board->board[idx].has_dot = 0;
+                } else {
+                    board->board[idx].content = ' ';
+                    board->board[idx].has_dot = 1;
+                }
+            }
+        }
+        
+        // Place Pacman at (1,1)
+        board->board[1 * board->width + 1].content = 'P';
+        board->pacmans[0].pos_x = 1;
+        board->pacmans[0].pos_y = 1;
+        board->pacmans[0].alive = 1;
+        board->pacmans[0].points = points;
+        board->pacmans[0].current_move = 0;
+        board->pacmans[0].n_moves = 0;
+        board->pacmans[0].passo = 0;
+        board->pacmans[0].waiting = 0;
+        
+        // Load static ghosts
+        load_ghost(board);
+        
+        return 0;
+    }
+
+    // Allocate ghosts based on parsed n_ghosts
     board->ghosts = calloc(board->n_ghosts, sizeof(ghost_t));
 
-    sprintf(board->level_name, "Static Level");
+    // Load Pacman behavior
+    if (board->pacman_file[0] != '\0') {
+        int passo;
+        if (parse_behavior_file(board->pacman_file, board->pacmans[0].moves, 
+                               &board->pacmans[0].n_moves, &passo) == 0) {
+            board->pacmans[0].passo = passo;
+            board->pacmans[0].waiting = passo;
+        }
+    } else {
+        board->pacmans[0].n_moves = 0; // User controlled
+        board->pacmans[0].passo = 0;
+        board->pacmans[0].waiting = 0;
+    }
 
-    for (int i = 0; i < board->height; i++) {
-        for (int j = 0; j < board->width; j++) {
-            if (i == 0 || j == 0 || j == (board->width - 1)) {
-                board->board[i * board->width + j].content = 'W';
-            }
-            else if (i == 4 && j == 8) {
-                board->board[i * board->width + j].content = ' ';
-                board->board[i * board->width + j].has_portal = 1;
-            }
-            else {
-                board->board[i * board->width + j].content = ' ';
-                board->board[i * board->width + j].has_dot = 1;
+    // Find Pacman position and place it
+    int pacman_placed = 0;
+    for (int y = 0; y < board->height && !pacman_placed; y++) {
+        for (int x = 0; x < board->width && !pacman_placed; x++) {
+            int idx = y * board->width + x;
+            if (board->board[idx].content == ' ' && !board->board[idx].has_portal) {
+                board->board[idx].content = 'P';
+                board->pacmans[0].pos_x = x;
+                board->pacmans[0].pos_y = y;
+                board->pacmans[0].alive = 1;
+                board->pacmans[0].points = points;
+                board->pacmans[0].current_move = 0;
+                pacman_placed = 1;
             }
         }
     }
 
-    load_ghost(board);
-    load_pacman(board, points);
+    // Load Ghosts behaviors and place them
+    for (int i = 0; i < board->n_ghosts; i++) {
+        int passo;
+        if (parse_behavior_file(board->ghosts_files[i], board->ghosts[i].moves, 
+                               &board->ghosts[i].n_moves, &passo) == 0) {
+            board->ghosts[i].passo = passo;
+            board->ghosts[i].waiting = passo;
+            board->ghosts[i].current_move = 0;
+            board->ghosts[i].charged = 0;
+
+            // Find position from behavior file POS line
+            int fd = open(board->ghosts_files[i], O_RDONLY);
+            if (fd != -1) {
+                char buf[1024];
+                ssize_t n = read(fd, buf, sizeof(buf) - 1);
+                if (n > 0) {
+                    buf[n] = '\0';
+                    char* pos_line = strstr(buf, "POS");
+                    int pos_x = 1, pos_y = 1;
+                    if (pos_line && sscanf(pos_line, "POS %d %d", &pos_y, &pos_x) == 2) {
+                        board->ghosts[i].pos_x = pos_x;
+                        board->ghosts[i].pos_y = pos_y;
+                        int idx = pos_y * board->width + pos_x;
+                        board->board[idx].content = 'M';
+                    }
+                }
+                close(fd);
+            }
+        }
+    }
 
     return 0;
 }

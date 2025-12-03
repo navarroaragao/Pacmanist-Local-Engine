@@ -75,8 +75,10 @@ int play_board(board_t * game_board) {
 int main(int argc, char** argv) {
     if (argc != 2) {
         printf("Usage: %s <level_directory>\n", argv[0]);
-        // TODO receive inputs
+        return 1;
     }
+
+    char* level_dir = argv[1];
 
     // Random seed for any random movements
     srand((unsigned int)time(NULL));
@@ -88,9 +90,16 @@ int main(int argc, char** argv) {
     int accumulated_points = 0;
     bool end_game = false;
     board_t game_board;
+    int current_level = 1;
 
     while (!end_game) {
-        load_level(&game_board, accumulated_points);
+        // Set level filename
+        snprintf(game_board.level_name, sizeof(game_board.level_name), "%d.lvl", current_level);
+        
+        if (load_level(&game_board, accumulated_points, level_dir) != 0) {
+            debug("Failed to load level %d\n", current_level);
+            break;
+        }
         draw_board(&game_board, DRAW_MENU);
         refresh_screen();
 
@@ -102,6 +111,7 @@ int main(int argc, char** argv) {
             if(result == NEXT_LEVEL) {
                 screen_refresh(&game_board, DRAW_WIN);
                 sleep_ms(game_board.tempo);
+                current_level++; // Avançar para o próximo nível
                 break;
             }
 
