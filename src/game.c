@@ -5,6 +5,8 @@
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/wait.h>
+#include <string.h>
+#include <dirent.h>
 
 #define CONTINUE_PLAY 0
 #define NEXT_LEVEL 1
@@ -22,15 +24,25 @@ void screen_refresh(board_t * game_board, int mode) {
 int play_board(board_t * game_board) {
     pacman_t* pacman = &game_board->pacmans[0];
     command_t* play;
-    if (pacman->n_moves == 0) { // if is user input
-        command_t c; 
-        c.command = get_input();
-
-        if(c.command == '\0')
+    command_t user_cmd;
+    
+    // Always check for user input (G and Q commands)
+    user_cmd.command = get_input();
+    
+    if (user_cmd.command == 'Q') {
+        return QUIT_GAME;
+    }
+    
+    if (user_cmd.command == 'G') {
+        return SAVE_STATE;
+    }
+    
+    if (pacman->n_moves == 0) { // if is user input controlled
+        if(user_cmd.command == '\0')
             return CONTINUE_PLAY;
 
-        c.turns = 1;
-        play = &c;
+        user_cmd.turns = 1;
+        play = &user_cmd;
     }
     else { // else if the moves are pre-defined in the file
         // avoid buffer overflow wrapping around with modulo of n_moves
@@ -80,6 +92,33 @@ int main(int argc, char** argv) {
 
     char* level_dir = argv[1];
 
+    // Read all .lvl files from directory
+    DIR* dir = opendir(level_dir);
+    if (!dir) {
+        printf("Failed to open level directory: %s\n", level_dir);
+        return 1;
+    }
+
+    // Count and store .lvl files
+    char level_files[MAX_LEVELS][MAX_FILENAME];
+    int level_count = 0;
+    struct dirent* entry;
+    
+    while ((entry = readdir(dir)) != NULL && level_count < MAX_LEVELS) {
+        char* ext = strrchr(entry->d_name, '.');
+        if (ext && strcmp(ext, ".lvl") == 0) {
+            strncpy(level_files[level_count], entry->d_name, MAX_FILENAME - 1);
+            level_files[level_count][MAX_FILENAME - 1] = '\0';
+            level_count++;
+        }
+    }
+    closedir(dir);
+
+    if (level_count == 0) {
+        printf("No .lvl files found in %s\n", level_dir);
+        return 1;
+    }
+
     // Random seed for any random movements
     srand((unsigned int)time(NULL));
 
@@ -90,14 +129,14 @@ int main(int argc, char** argv) {
     int accumulated_points = 0;
     bool end_game = false;
     board_t game_board;
-    int current_level = 1;
+    int current_level_index = 0;
 
-    while (!end_game) {
-        // Set level filename
-        snprintf(game_board.level_name, sizeof(game_board.level_name), "%d.lvl", current_level);
+    while (!end_game && current_level_index < level_count) {
+        // Set level filename from the list
+        snprintf(game_board.level_name, sizeof(game_board.level_name), "%s", level_files[current_level_index]);
         
         if (load_level(&game_board, accumulated_points, level_dir) != 0) {
-            debug("Failed to load level %d\n", current_level);
+            debug("Failed to load level %s\n", level_files[current_level_index]);
             break;
         }
         draw_board(&game_board, DRAW_MENU);
@@ -111,7 +150,7 @@ int main(int argc, char** argv) {
             if(result == NEXT_LEVEL) {
                 screen_refresh(&game_board, DRAW_WIN);
                 sleep_ms(game_board.tempo);
-                current_level++; // Avançar para o próximo nível
+                current_level_index++; // Avançar para o próximo nível
                 break;
             }
 

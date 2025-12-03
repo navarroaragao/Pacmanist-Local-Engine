@@ -3,7 +3,7 @@ PASSO 1
 POS 3 2
 # Comandos de movimento
 D
-D
+C
 D
 D
 D
