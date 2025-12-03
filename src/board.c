@@ -615,9 +615,9 @@ int load_level(board_t *board, int points, const char* level_dir) {
     if (parse_level_file(board, level_dir) != 0) {
         debug("Failed to parse level file, loading static level\n");
         
-        // Fallback to static 6x6 level
+        // Fallback to static 6x8 level
         board->height = 6;
-        board->width = 6;
+        board->width = 8;
         board->tempo = 100;
         board->n_ghosts = 2;
         board->board = calloc(board->width * board->height, sizeof(board_pos_t));

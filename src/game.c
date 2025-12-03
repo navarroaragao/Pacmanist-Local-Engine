@@ -246,8 +246,10 @@ int main(int argc, char** argv) {
     closedir(dir);
 
     if (level_count == 0) {
-        printf("No .lvl files found in %s\n", level_dir);
-        return 1;
+        printf("No .lvl files found in %s, loading static level\n", level_dir);
+        // Add a dummy entry to load static level
+        strcpy(level_files[0], "static.lvl");
+        level_count = 1;
     }
 
     // Random seed for any random movements

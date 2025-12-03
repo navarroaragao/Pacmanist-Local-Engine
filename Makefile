@@ -37,7 +37,7 @@ $(BIN_DIR)/$(TARGET): $(OBJS) | folders
 
 # run the program
 run: pacmanist
-	@./$(BIN_DIR)/$(TARGET) levels
+	@./$(BIN_DIR)/$(TARGET) .
 
 # Create folders
 folders:
