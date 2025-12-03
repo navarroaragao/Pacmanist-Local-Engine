@@ -89,7 +89,7 @@ int move_pacman(board_t* board, int pacman_index, command_t* command) {
     }
 
     // Logic for the WASD movement
-    pac->current_move+=1;
+    ++pac->current_move;
 
     // Check boundaries
     if (!is_valid_position(board, new_x, new_y)) {
@@ -133,10 +133,10 @@ int move_pacman(board_t* board, int pacman_index, command_t* command) {
 
 // Helper private function for charged ghost movement in one direction
 static int move_ghost_charged_direction(board_t* board, ghost_t* ghost, char direction, int* new_x, int* new_y) {
-    int x = ghost->pos_x;
-    int y = ghost->pos_y;
-    *new_x = x;
-    *new_y = y;
+    *new_x = ghost->pos_x;
+    *new_y = ghost->pos_y;
+    int x = *new_x;
+    int y = *new_y;
     
     switch (direction) {
         case 'W': // Up
@@ -211,10 +211,7 @@ static int move_ghost_charged_direction(board_t* board, ghost_t* ghost, char dir
 
 int move_ghost_charged(board_t* board, int ghost_index, char direction) {
     ghost_t* ghost = &board->ghosts[ghost_index];
-    int x = ghost->pos_x;
-    int y = ghost->pos_y;
-    int new_x = x;
-    int new_y = y;
+    int new_x, new_y;
 
     ghost->charged = 0; //uncharge
     int result = move_ghost_charged_direction(board, ghost, direction, &new_x, &new_y);
@@ -286,7 +283,7 @@ int move_ghost(board_t* board, int ghost_index, command_t* command) {
     }
 
     // Logic for the WASD movement
-    ghost->current_move++;
+    ++ghost->current_move;
     if (ghost->charged)
         return move_ghost_charged(board, ghost_index, direction);
 
@@ -463,6 +460,7 @@ int parse_level_file(board_t* board, const char* level_dir) {
     ssize_t bytes_read;
     int board_line = 0;
     int has_dim = 0, has_tempo = 0, has_pac = 0, has_mon = 0;
+    int width_cache = 0;
 
     while ((bytes_read = read(fd, buffer, sizeof(buffer))) > 0) {
         for (ssize_t i = 0; i < bytes_read; i++) {
@@ -479,6 +477,7 @@ int parse_level_file(board_t* board, const char* level_dir) {
                             close(fd);
                             return -1;
                         }
+                        width_cache = board->width;
                         board->board = calloc(board->width * board->height, sizeof(board_pos_t));
                         has_dim = 1;
                     } else if (strncmp(line_buffer, "TEMPO ", 6) == 0 && !has_tempo) {
@@ -495,12 +494,13 @@ int parse_level_file(board_t* board, const char* level_dir) {
                     } else if (strncmp(line_buffer, "MON", 3) == 0 && !has_mon) {
                         char* mon_start = strchr(line_buffer, ' ');
                         if (mon_start) {
-                            mon_start++;
+                            ++mon_start;
                             board->n_ghosts = 0;
                             char mon_file[128];
                             char line_copy[512];
-                            strncpy(line_copy, mon_start, sizeof(line_copy) - 1);
-                            line_copy[sizeof(line_copy) - 1] = '\0';
+                            size_t copy_len = sizeof(line_copy) - 1;
+                            strncpy(line_copy, mon_start, copy_len);
+                            line_copy[copy_len] = '\0';
                             char* token = strtok(line_copy, " ");
                             while (token && board->n_ghosts < MAX_GHOSTS) {
                                 strncpy(mon_file, token, sizeof(mon_file) - 1);
@@ -514,8 +514,9 @@ int parse_level_file(board_t* board, const char* level_dir) {
                     } else if (has_dim && has_tempo && has_pac && has_mon) {
                         // Board content
                         if (board_line < board->height) {
-                            for (int x = 0; x < board->width && line_buffer[x] != '\0'; x++) {
-                                int idx = board_line * board->width + x;
+                            int row_offset = board_line * width_cache;
+                            for (int x = 0; x < width_cache && line_buffer[x] != '\0'; x++) {
+                                int idx = row_offset + x;
                                 char ch = line_buffer[x];
                                 
                                 if (ch == 'X') {

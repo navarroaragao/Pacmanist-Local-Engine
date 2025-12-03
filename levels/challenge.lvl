@@ -1,7 +1,7 @@
 # Nivel 3 - Desafio avancado
 DIM 12 15
 TEMPO 100
-PAC
+PAC 2.p
 MON 5.m 6.m 7.m
 XXXXXXXXXXXXXXX
 XoooooXoooooooX
