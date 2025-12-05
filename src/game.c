@@ -127,16 +127,16 @@ void* input_thread(void* arg) {
     while (board->game_running) {
         char input = get_input();
         
-        // Only allow Q to quit if Pacman is user-controlled (n_moves == 0)
-        if (input == 'Q' && pacman->n_moves == 0) {
+        // Allow Q to quit in any mode
+        if (input == 'Q') {
             board->game_result = QUIT_GAME;
             board->level_complete = true;
             board->game_running = false;
             break;
         }
         
-        // Only allow G (quicksave) if Pacman is user-controlled (n_moves == 0)
-        if (input == 'G' && pacman->n_moves == 0) {
+        // Allow G (quicksave) in any mode
+        if (input == 'G') {
             board->game_result = SAVE_STATE;
             board->level_complete = true;
             board->game_running = false;
