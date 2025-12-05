@@ -8,7 +8,7 @@
 #include <pthread.h>
 
 // Parse behavior file for Pacman or Monster
-int parse_behavior_file(const char* filename, command_t* moves, int* n_moves, int* passo) {
+int parse_pacman_ghost_file(const char* filename, command_t* moves, int* n_moves, int* passo) {
     int fd = open(filename, O_RDONLY); // Open the behavior file
     if (fd == -1) {
         debug("Failed to open behavior file: %s\n", filename);

@@ -490,7 +490,7 @@ int load_level(board_t *board, int points, const char* level_dir) {
     // Load Pacman behavior
     if (board->pacman_file[0] != '\0') {
         int passo;
-        if (parse_behavior_file(board->pacman_file, board->pacmans[0].moves, 
+        if (parse_pacman_ghost_file(board->pacman_file, board->pacmans[0].moves, 
                                &board->pacmans[0].n_moves, &passo) == 0) {
             board->pacmans[0].passo = passo;
             board->pacmans[0].waiting = passo;
@@ -521,7 +521,7 @@ int load_level(board_t *board, int points, const char* level_dir) {
     // Load Ghosts behaviors and place them
     for (int i = 0; i < board->n_ghosts; i++) {
         int passo;
-        if (parse_behavior_file(board->ghosts_files[i], board->ghosts[i].moves, 
+        if (parse_pacman_ghost_file(board->ghosts_files[i], board->ghosts[i].moves, 
                                &board->ghosts[i].n_moves, &passo) == 0) {
             board->ghosts[i].passo = passo;
             board->ghosts[i].waiting = passo;
