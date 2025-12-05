@@ -14,6 +14,7 @@ typedef enum {
     VALID_MOVE = 0,
     INVALID_MOVE = -1,
     DEAD_PACMAN = -2,
+    QUICKSAVE = -3,
 } move_t;
 
 typedef struct {

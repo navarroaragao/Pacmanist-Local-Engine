@@ -47,6 +47,10 @@ void* pacman_thread(void* arg) {
             board->game_result = QUIT_GAME;
             board->level_complete = true;
             board->game_running = false;
+        } else if (result == QUICKSAVE) {
+            board->game_result = SAVE_STATE;
+            board->level_complete = true;
+            board->game_running = false;
         }
         
         if (board->tempo > 0) {
@@ -123,14 +127,16 @@ void* input_thread(void* arg) {
     while (board->game_running) {
         char input = get_input();
         
-        if (input == 'Q') {
+        // Only allow Q to quit if Pacman is user-controlled (n_moves == 0)
+        if (input == 'Q' && pacman->n_moves == 0) {
             board->game_result = QUIT_GAME;
             board->level_complete = true;
             board->game_running = false;
             break;
         }
         
-        if (input == 'G') {
+        // Only allow G (quicksave) if Pacman is user-controlled (n_moves == 0)
+        if (input == 'G' && pacman->n_moves == 0) {
             board->game_result = SAVE_STATE;
             board->level_complete = true;
             board->game_running = false;
@@ -152,6 +158,10 @@ void* input_thread(void* arg) {
                 board->game_running = false;
             } else if (result == DEAD_PACMAN) {
                 board->game_result = QUIT_GAME;
+                board->level_complete = true;
+                board->game_running = false;
+            } else if (result == QUICKSAVE) {
+                board->game_result = SAVE_STATE;
                 board->level_complete = true;
                 board->game_running = false;
             }

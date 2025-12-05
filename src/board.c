@@ -85,6 +85,12 @@ int move_pacman(board_t* board, int pacman_index, command_t* command) {
             }
             else command->turns_left -= 1;
             return VALID_MOVE;
+        case 'Q': // Quit (from file)
+            pac->current_move += 1;
+            return DEAD_PACMAN; // Terminate game
+        case 'G': // Quicksave (from file)
+            pac->current_move += 1;
+            return QUICKSAVE; // Trigger quicksave
         default:
             return INVALID_MOVE; // Invalid direction
     }
