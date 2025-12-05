@@ -13,11 +13,12 @@ INCLUDE_DIR = include
 TARGET = Pacmanist
 
 # Objects variables
-OBJS = game.o display.o board.o
+OBJS = game.o display.o board.o parse.o
 
 # Dependencies
 display.o = display.h
-board.o = board.h
+board.o = board.h parse.h
+parse.o = parse.h board.h
 
 # Object files path
 vpath %.o $(OBJ_DIR)

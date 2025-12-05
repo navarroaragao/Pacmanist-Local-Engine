@@ -87,12 +87,6 @@ int load_pacman(board_t* board, int points);
 /*Adds a ghost(monster) to the board*/
 int load_ghost(board_t* board);
 
-/*Parse behavior file (Pacman or Monster) - returns 0 on success*/
-int parse_behavior_file(const char* filename, command_t* moves, int* n_moves, int* passo);
-
-/*Parse level file and initialize board - returns 0 on success*/
-int parse_level_file(board_t* board, const char* level_dir);
-
 /*Loads a level into board from directory*/
 int load_level(board_t* board, int accumulated_points, const char* level_dir);
 
