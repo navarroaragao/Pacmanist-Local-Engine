@@ -11,8 +11,8 @@
 static inline int parse_and_add_command(const char* line, command_t* moves, int move_count) {
     if (move_count >= MAX_MOVES) return move_count;
     
-    char cmd;
-    int turns;
+    char cmd; // command character
+    int turns; // number of turns for the cmd
     if (sscanf(line, "%c %d", &cmd, &turns) == 2) {
         moves[move_count].command = cmd;
         moves[move_count].turns = turns;
