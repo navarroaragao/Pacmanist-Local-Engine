@@ -69,6 +69,30 @@ int parse_pacman_ghost_file(const char* filename, command_t* moves, int* n_moves
         }
     }
     
+    // Process last line if EOF reached with pending data
+    if (line_pos > 0) {
+        line_buffer[line_pos] = '\0';
+        if (line_buffer[0] != '#' && line_buffer[0] != '\0' && has_passo && has_pos) {
+            char cmd;
+            int turns;
+            if (sscanf(line_buffer, "%c %d", &cmd, &turns) == 2) {
+                if (move_count < MAX_MOVES) {
+                    moves[move_count].command = cmd;
+                    moves[move_count].turns = turns;
+                    moves[move_count].turns_left = turns;
+                    move_count++;
+                }
+            } else if (sscanf(line_buffer, "%c", &cmd) == 1) {
+                if (move_count < MAX_MOVES) {
+                    moves[move_count].command = cmd;
+                    moves[move_count].turns = 1;
+                    moves[move_count].turns_left = 1;
+                    move_count++;
+                }
+            }
+        }
+    }
+    
     close(fd);
     *n_moves = move_count;
     return 0;
@@ -177,6 +201,35 @@ int parse_level_file(board_t* board, const char* level_dir) {
                 line_pos = 0;
             } else {
                 line_buffer[line_pos++] = c;
+            }
+        }
+    }
+
+    // Process last line if EOF reached with pending data
+    if (line_pos > 0) {
+        line_buffer[line_pos] = '\0';
+        if (line_buffer[0] != '#' && line_buffer[0] != '\0' && has_dim && has_tempo && has_pac && has_mon) {
+            if (board_line < board->height) {
+                int row_offset = board_line * width_cache;
+                for (int x = 0; x < width_cache && line_buffer[x] != '\0'; x++) {
+                    int idx = row_offset + x;
+                    char ch = line_buffer[x];
+                    
+                    if (ch == 'X') {
+                        board->board[idx].content = 'W';
+                        board->board[idx].has_dot = 0;
+                    } else if (ch == 'o') {
+                        board->board[idx].content = ' ';
+                        board->board[idx].has_dot = 1;
+                    } else if (ch == '@') {
+                        board->board[idx].content = ' ';
+                        board->board[idx].has_portal = 1;
+                        board->board[idx].has_dot = 0;
+                    } else {
+                        board->board[idx].content = ' ';
+                        board->board[idx].has_dot = 0;
+                    }
+                }
             }
         }
     }

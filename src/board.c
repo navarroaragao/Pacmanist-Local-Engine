@@ -541,13 +541,30 @@ int load_level(board_t *board, int points, const char* level_dir) {
                 ssize_t n = read(fd, buf, sizeof(buf) - 1);
                 if (n > 0) {
                     buf[n] = '\0';
-                    char* pos_line = strstr(buf, "POS");
+                    // Find POS line that is not a comment
+                    char* line = buf;
                     int pos_x = 1, pos_y = 1;
-                    if (pos_line && sscanf(pos_line, "POS %d %d", &pos_y, &pos_x) == 2) {
-                        board->ghosts[i].pos_x = pos_x;
-                        board->ghosts[i].pos_y = pos_y;
-                        int idx = pos_y * board->width + pos_x;
-                        board->board[idx].content = 'M';
+                    int found = 0;
+                    while (line && *line) {
+                        // Skip leading whitespace
+                        while (*line == ' ' || *line == '\t') line++;
+                        // Check if line starts with POS (not a comment)
+                        if (*line != '#' && strncmp(line, "POS", 3) == 0) {
+                            if (sscanf(line, "POS %d %d", &pos_y, &pos_x) == 2) {
+                                board->ghosts[i].pos_x = pos_x;
+                                board->ghosts[i].pos_y = pos_y;
+                                int idx = pos_y * board->width + pos_x;
+                                board->board[idx].content = 'M';
+                                found = 1;
+                                break;
+                            }
+                        }
+                        // Move to next line
+                        line = strchr(line, '\n');
+                        if (line) line++;
+                    }
+                    if (!found) {
+                        debug("Ghost %d: Failed to find POS command\n", i);
                     }
                 }
                 close(fd);
