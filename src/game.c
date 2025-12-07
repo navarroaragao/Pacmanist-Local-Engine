@@ -282,30 +282,39 @@ int main(int argc, char** argv) {
                 break;
             }
 
-            if(result == SAVE_STATE && !is_child_process) {
-                pid_t pid = fork();
-                
-                if (pid == 0) {
-                    is_child_process = true;
-                    // Child continues playing - reset game state
-                    game_board.game_running = true;
-                    game_board.level_complete = false;
-                    game_board.game_result = CONTINUE_PLAY;
-                    continue; // Continue the game loop
+            if(result == SAVE_STATE) {
+                if (!is_child_process) {
+                    // Only fork if we're in the parent process
+                    pid_t pid = fork();
+                    
+                    if (pid == 0) {
+                        is_child_process = true;
+                        // Child continues playing - reset game state
+                        game_board.game_running = true;
+                        game_board.level_complete = false;
+                        game_board.game_result = CONTINUE_PLAY;
+                        continue; // Continue the game loop
 
-                } else if (pid > 0) {
-                    int status;
-                    waitpid(pid, &status, 0);
-                    
-                    terminal_cleanup();
-                    terminal_init();
-                    
-                    pthread_mutex_lock(&game_board.display_mutex);
-                    draw_board(&game_board, DRAW_MENU);
-                    refresh_screen();
-                    pthread_mutex_unlock(&game_board.display_mutex);
-                    
-                    // Parent resets and continues
+                    } else if (pid > 0) {
+                        int status;
+                        waitpid(pid, &status, 0);
+                        
+                        terminal_cleanup();
+                        terminal_init();
+                        
+                        pthread_mutex_lock(&game_board.display_mutex);
+                        draw_board(&game_board, DRAW_MENU);
+                        refresh_screen();
+                        pthread_mutex_unlock(&game_board.display_mutex);
+                        
+                        // Parent resets and continues
+                        game_board.game_running = true;
+                        game_board.level_complete = false;
+                        game_board.game_result = CONTINUE_PLAY;
+                        continue;
+                    }
+                } else {
+                    // Already in child process - ignore G command and continue playing
                     game_board.game_running = true;
                     game_board.level_complete = false;
                     game_board.game_result = CONTINUE_PLAY;
