@@ -3,6 +3,24 @@
 #include <stdlib.h>
 #include <ctype.h>
 
+// Helper function to draw character with color
+static inline void draw_with_color(char ch, int color_pair, int attributes) {
+    attron(color_pair | attributes);
+    addch(ch);
+    attroff(color_pair | attributes);
+}
+
+// Helper function to check if ghost is charged at position
+static inline int is_ghost_charged_at(board_t* board, int x, int y) {
+    for (int g = 0; g < board->n_ghosts; g++) {
+        ghost_t* ghost = &board->ghosts[g];
+        if (ghost->pos_x == x && ghost->pos_y == y && ghost->charged) {
+            return 1;
+        }
+    }
+    return 0;
+}
+
 
 int terminal_init() {
     // Initialize ncurses mode
@@ -74,16 +92,6 @@ void draw_board(board_t* board, int mode) {
         for (int x = 0; x < board->width; x++) {
             int index = y * board->width + x;
             char ch = board->board[index].content;
-            int ghost_charged = 0;
-
-            for (int g = 0; g < board->n_ghosts; g++) {
-                ghost_t* ghost = &board->ghosts[g];
-                if (ghost->pos_x == x && ghost->pos_y == y) {
-                    if (ghost->charged)
-                        ghost_charged = 1;
-                    break;
-                }
-            }
 
             // Move cursor to position
             move(start_row + y, x);
@@ -91,33 +99,24 @@ void draw_board(board_t* board, int mode) {
             // Draw with appropriate color
             switch (ch) {
                 case 'W': // Wall
-                    attron(COLOR_PAIR(3));
-                    addch('#');
-                    attroff(COLOR_PAIR(3));
+                    draw_with_color('#', COLOR_PAIR(3), 0);
                     break;
 
                 case 'P': // Pacman
-                    attron(COLOR_PAIR(1) | A_BOLD);
-                    addch('C');
-                    attroff(COLOR_PAIR(1) | A_BOLD);
+                    draw_with_color('C', COLOR_PAIR(1), A_BOLD);
                     break;
 
                 case 'M': // Monster/Ghost
-                    attron((COLOR_PAIR(2) | A_BOLD) | ((ghost_charged) ? (A_DIM) : (0)));
-                    addch('M');
-                    attroff((COLOR_PAIR(2) | A_BOLD) | ((ghost_charged) ? (A_DIM) : (0)));
+                    draw_with_color('M', COLOR_PAIR(2) | A_BOLD, 
+                                   is_ghost_charged_at(board, x, y) ? A_DIM : 0);
                     break;
 
                 case ' ': // Empty space
                     if (board->board[index].has_portal) {
-                        attron(COLOR_PAIR(6));
-                        addch('@');
-                        attroff(COLOR_PAIR(6));
+                        draw_with_color('@', COLOR_PAIR(6), 0);
                     }
                     else if (board->board[index].has_dot) {
-                        attron(COLOR_PAIR(4));
-                        addch('.');
-                        attroff(COLOR_PAIR(4));
+                        draw_with_color('.', COLOR_PAIR(4), 0);
                     }
                     else
                         addch(' ');
