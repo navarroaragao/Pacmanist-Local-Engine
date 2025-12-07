@@ -20,6 +20,18 @@ typedef struct {
     int character_index;
 } thread_arg_t;
 
+// Helper function to set game result and stop game
+static inline void set_game_result(board_t* board, int result) {
+    board->game_result = result;
+    board->level_complete = true;
+    board->game_running = false;
+}
+
+// Helper function for adaptive sleep based on tempo
+static inline void adaptive_sleep(board_t* board) {
+    sleep_ms(board->tempo > 0 ? board->tempo : 50);
+}
+
 // Pacman thread function
 void* pacman_thread(void* arg) {
     thread_arg_t* targ = (thread_arg_t*)arg;
@@ -40,24 +52,14 @@ void* pacman_thread(void* arg) {
         int result = move_pacman(board, pac_index, play);
         
         if (result == REACHED_PORTAL) {
-            board->game_result = NEXT_LEVEL;
-            board->level_complete = true;
-            board->game_running = false;
+            set_game_result(board, NEXT_LEVEL);
         } else if (result == DEAD_PACMAN) {
-            board->game_result = QUIT_GAME;
-            board->level_complete = true;
-            board->game_running = false;
+            set_game_result(board, QUIT_GAME);
         } else if (result == QUICKSAVE) {
-            board->game_result = SAVE_STATE;
-            board->level_complete = true;
-            board->game_running = false;
+            set_game_result(board, SAVE_STATE);
         }
         
-        if (board->tempo > 0) {
-            sleep_ms(board->tempo);
-        } else {
-            sleep_ms(50);
-        }
+        adaptive_sleep(board);
     }
     
     return NULL;
@@ -82,16 +84,10 @@ void* ghost_thread(void* arg) {
         
         // Check if pacman died
         if (!board->pacmans[0].alive) {
-            board->game_result = QUIT_GAME;
-            board->level_complete = true;
-            board->game_running = false;
+            set_game_result(board, QUIT_GAME);
         }
         
-        if (board->tempo > 0) {
-            sleep_ms(board->tempo);
-        } else {
-            sleep_ms(50);
-        }
+        adaptive_sleep(board);
     }
     
     return NULL;
@@ -109,11 +105,7 @@ void* display_thread(void* arg) {
         
         pthread_mutex_unlock(&board->display_mutex);
         
-        if (board->tempo > 0) {
-            sleep_ms(board->tempo);
-        } else {
-            sleep_ms(50); // Default refresh rate
-        }
+        adaptive_sleep(board);
     }
     
     return NULL;
@@ -129,17 +121,13 @@ void* input_thread(void* arg) {
         
         // Allow Q to quit in any mode
         if (input == 'Q') {
-            board->game_result = QUIT_GAME;
-            board->level_complete = true;
-            board->game_running = false;
+            set_game_result(board, QUIT_GAME);
             break;
         }
         
         // Allow G (quicksave) in any mode
         if (input == 'G') {
-            board->game_result = SAVE_STATE;
-            board->level_complete = true;
-            board->game_running = false;
+            set_game_result(board, SAVE_STATE);
             break;
         }
         
@@ -153,17 +141,11 @@ void* input_thread(void* arg) {
             int result = move_pacman(board, 0, &user_cmd);
             
             if (result == REACHED_PORTAL) {
-                board->game_result = NEXT_LEVEL;
-                board->level_complete = true;
-                board->game_running = false;
+                set_game_result(board, NEXT_LEVEL);
             } else if (result == DEAD_PACMAN) {
-                board->game_result = QUIT_GAME;
-                board->level_complete = true;
-                board->game_running = false;
+                set_game_result(board, QUIT_GAME);
             } else if (result == QUICKSAVE) {
-                board->game_result = SAVE_STATE;
-                board->level_complete = true;
-                board->game_running = false;
+                set_game_result(board, SAVE_STATE);
             }
         }
         

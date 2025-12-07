@@ -7,6 +7,44 @@
 #include <string.h>
 #include <pthread.h>
 
+// Helper function to parse and add movement command
+static inline int parse_and_add_command(const char* line, command_t* moves, int move_count) {
+    if (move_count >= MAX_MOVES) return move_count;
+    
+    char cmd;
+    int turns;
+    if (sscanf(line, "%c %d", &cmd, &turns) == 2) {
+        moves[move_count].command = cmd;
+        moves[move_count].turns = turns;
+        moves[move_count].turns_left = turns;
+        return move_count + 1;
+    } else if (sscanf(line, "%c", &cmd) == 1) {
+        moves[move_count].command = cmd;
+        moves[move_count].turns = 1;
+        moves[move_count].turns_left = 1;
+        return move_count + 1;
+    }
+    return move_count;
+}
+
+// Helper function to process board character
+static inline void process_board_char(board_pos_t* pos, char ch) {
+    if (ch == 'X') {
+        pos->content = 'W';
+        pos->has_dot = 0;
+    } else if (ch == 'o') {
+        pos->content = ' ';
+        pos->has_dot = 1;
+    } else if (ch == '@') {
+        pos->content = ' ';
+        pos->has_portal = 1;
+        pos->has_dot = 0;
+    } else {
+        pos->content = ' ';
+        pos->has_dot = 0;
+    }
+}
+
 // Parse behavior file for Pacman or Monster
 int parse_pacman_ghost_file(const char* filename, command_t* moves, int* n_moves, int* passo) {
     int fd = open(filename, O_RDONLY); // Open the behavior file
@@ -42,23 +80,7 @@ int parse_pacman_ghost_file(const char* filename, command_t* moves, int* n_moves
                         has_pos = 1;
                     } else if (has_passo && has_pos) {
                         // Movement commands
-                        char cmd;
-                        int turns;
-                        if (sscanf(line_buffer, "%c %d", &cmd, &turns) == 2) {
-                            if (move_count < MAX_MOVES) {
-                                moves[move_count].command = cmd;
-                                moves[move_count].turns = turns;
-                                moves[move_count].turns_left = turns;
-                                move_count++;
-                            }
-                        } else if (sscanf(line_buffer, "%c", &cmd) == 1) {
-                            if (move_count < MAX_MOVES) {
-                                moves[move_count].command = cmd;
-                                moves[move_count].turns = 1;
-                                moves[move_count].turns_left = 1;
-                                move_count++;
-                            }
-                        }
+                        move_count = parse_and_add_command(line_buffer, moves, move_count);
                     }
                 }
                 
@@ -73,23 +95,7 @@ int parse_pacman_ghost_file(const char* filename, command_t* moves, int* n_moves
     if (line_pos > 0) {
         line_buffer[line_pos] = '\0';
         if (line_buffer[0] != '#' && line_buffer[0] != '\0' && has_passo && has_pos) {
-            char cmd;
-            int turns;
-            if (sscanf(line_buffer, "%c %d", &cmd, &turns) == 2) {
-                if (move_count < MAX_MOVES) {
-                    moves[move_count].command = cmd;
-                    moves[move_count].turns = turns;
-                    moves[move_count].turns_left = turns;
-                    move_count++;
-                }
-            } else if (sscanf(line_buffer, "%c", &cmd) == 1) {
-                if (move_count < MAX_MOVES) {
-                    moves[move_count].command = cmd;
-                    moves[move_count].turns = 1;
-                    moves[move_count].turns_left = 1;
-                    move_count++;
-                }
-            }
+            move_count = parse_and_add_command(line_buffer, moves, move_count);
         }
     }
     
@@ -176,22 +182,7 @@ int parse_level_file(board_t* board, const char* level_dir) {
                             int row_offset = board_line * width_cache;
                             for (int x = 0; x < width_cache && line_buffer[x] != '\0'; x++) {
                                 int idx = row_offset + x;
-                                char ch = line_buffer[x];
-                                
-                                if (ch == 'X') {
-                                    board->board[idx].content = 'W';
-                                    board->board[idx].has_dot = 0;
-                                } else if (ch == 'o') {
-                                    board->board[idx].content = ' ';
-                                    board->board[idx].has_dot = 1;
-                                } else if (ch == '@') {
-                                    board->board[idx].content = ' ';
-                                    board->board[idx].has_portal = 1;
-                                    board->board[idx].has_dot = 0;
-                                } else {
-                                    board->board[idx].content = ' ';
-                                    board->board[idx].has_dot = 0;
-                                }
+                                process_board_char(&board->board[idx], line_buffer[x]);
                             }
                             board_line++;
                         }
@@ -213,22 +204,7 @@ int parse_level_file(board_t* board, const char* level_dir) {
                 int row_offset = board_line * width_cache;
                 for (int x = 0; x < width_cache && line_buffer[x] != '\0'; x++) {
                     int idx = row_offset + x;
-                    char ch = line_buffer[x];
-                    
-                    if (ch == 'X') {
-                        board->board[idx].content = 'W';
-                        board->board[idx].has_dot = 0;
-                    } else if (ch == 'o') {
-                        board->board[idx].content = ' ';
-                        board->board[idx].has_dot = 1;
-                    } else if (ch == '@') {
-                        board->board[idx].content = ' ';
-                        board->board[idx].has_portal = 1;
-                        board->board[idx].has_dot = 0;
-                    } else {
-                        board->board[idx].content = ' ';
-                        board->board[idx].has_dot = 0;
-                    }
+                    process_board_char(&board->board[idx], line_buffer[x]);
                 }
             }
         }
