@@ -34,6 +34,30 @@ static inline int is_valid_position(board_t* board, int x, int y) {
     return (x >= 0 && x < board->width) && (y >= 0 && y < board->height); // Inside of the board boundaries
 }
 
+// Helper private function to unlock positions in order
+static inline void unlock_positions(board_t* board, int first_idx, int second_idx) {
+    if (first_idx != second_idx) {
+        pthread_mutex_unlock(&board->board[second_idx].pos_mutex);
+    }
+    pthread_mutex_unlock(&board->board[first_idx].pos_mutex);
+}
+
+// Helper private function to get random direction
+static inline char get_random_direction(void) {
+    static const char directions[] = {'W', 'S', 'A', 'D'};
+    return directions[rand() % 4];
+}
+
+// Helper private function to calculate new position based on direction
+static inline void calculate_new_position(int* new_x, int* new_y, char direction) {
+    switch (direction) {
+        case 'W': (*new_y)--; break;
+        case 'S': (*new_y)++; break;
+        case 'A': (*new_x)--; break;
+        case 'D': (*new_x)++; break;
+    }
+}
+
 void sleep_ms(int milliseconds) {
     struct timespec ts;
     ts.tv_sec = milliseconds / 1000;
@@ -60,23 +84,16 @@ int move_pacman(board_t* board, int pacman_index, command_t* command) {
     char direction = command->command;
 
     if (direction == 'R') {
-        char directions[] = {'W', 'S', 'A', 'D'};
-        direction = directions[rand() % 4];
+        direction = get_random_direction();
     }
 
     // Calculate new position based on direction
     switch (direction) {
         case 'W': // Up
-            new_y--;
-            break;
         case 'S': // Down
-            new_y++;
-            break;
         case 'A': // Left
-            new_x--;
-            break;
         case 'D': // Right
-            new_x++;
+            calculate_new_position(&new_x, &new_y, direction);
             break;
         case 'T': // Wait
             if (command->turns_left == 1) {
@@ -120,30 +137,20 @@ int move_pacman(board_t* board, int pacman_index, command_t* command) {
     if (board->board[new_index].has_portal) {
         board->board[old_index].content = ' ';
         board->board[new_index].content = 'P';
-        
-        if (first_idx != second_idx) {
-            pthread_mutex_unlock(&board->board[second_idx].pos_mutex);
-        }
-        pthread_mutex_unlock(&board->board[first_idx].pos_mutex);
+        unlock_positions(board, first_idx, second_idx);
         return REACHED_PORTAL;
     }
 
     // Check for walls
     if (target_content == 'W') {
-        if (first_idx != second_idx) {
-            pthread_mutex_unlock(&board->board[second_idx].pos_mutex);
-        }
-        pthread_mutex_unlock(&board->board[first_idx].pos_mutex);
+        unlock_positions(board, first_idx, second_idx);
         return INVALID_MOVE;
     }
 
     // Check for ghosts
     if (target_content == 'M') {
         kill_pacman(board, pacman_index);
-        if (first_idx != second_idx) {
-            pthread_mutex_unlock(&board->board[second_idx].pos_mutex);
-        }
-        pthread_mutex_unlock(&board->board[first_idx].pos_mutex);
+        unlock_positions(board, first_idx, second_idx);
         return DEAD_PACMAN;
     }
 
@@ -158,10 +165,7 @@ int move_pacman(board_t* board, int pacman_index, command_t* command) {
     pac->pos_y = new_y;
     board->board[new_index].content = 'P';
 
-    if (first_idx != second_idx) {
-        pthread_mutex_unlock(&board->board[second_idx].pos_mutex);
-    }
-    pthread_mutex_unlock(&board->board[first_idx].pos_mutex);
+    unlock_positions(board, first_idx, second_idx);
     return VALID_MOVE;
 }
 
@@ -283,23 +287,16 @@ int move_ghost(board_t* board, int ghost_index, command_t* command) {
     char direction = command->command;
     
     if (direction == 'R') {
-        char directions[] = {'W', 'S', 'A', 'D'};
-        direction = directions[rand() % 4];
+        direction = get_random_direction();
     }
 
     // Calculate new position based on direction
     switch (direction) {
         case 'W': // Up
-            new_y--;
-            break;
         case 'S': // Down
-            new_y++;
-            break;
         case 'A': // Left
-            new_x--;
-            break;
         case 'D': // Right
-            new_x++;
+            calculate_new_position(&new_x, &new_y, direction);
             break;
         case 'C': // Charge
             ghost->current_move += 1;
@@ -343,10 +340,7 @@ int move_ghost(board_t* board, int ghost_index, command_t* command) {
 
     // Check for walls and ghosts
     if (target_content == 'W' || target_content == 'M') {
-        if (first_idx != second_idx) {
-            pthread_mutex_unlock(&board->board[second_idx].pos_mutex);
-        }
-        pthread_mutex_unlock(&board->board[first_idx].pos_mutex);
+        unlock_positions(board, first_idx, second_idx);
         return INVALID_MOVE;
     }
 
@@ -366,10 +360,7 @@ int move_ghost(board_t* board, int ghost_index, command_t* command) {
     // Update board - set new position
     board->board[new_index].content = 'M';
     
-    if (first_idx != second_idx) {
-        pthread_mutex_unlock(&board->board[second_idx].pos_mutex);
-    }
-    pthread_mutex_unlock(&board->board[first_idx].pos_mutex);
+    unlock_positions(board, first_idx, second_idx);
     return result;
 }
 
@@ -507,19 +498,31 @@ int load_level(board_t *board, int points, const char* level_dir) {
         board->pacmans[0].waiting = 0;
     }
 
-    // Find Pacman position and place it
-    int pacman_placed = 0;
-    for (int y = 0; y < board->height && !pacman_placed; y++) {
-        for (int x = 0; x < board->width && !pacman_placed; x++) {
-            int idx = y * board->width + x;
-            if (board->board[idx].content == ' ' && !board->board[idx].has_portal) {
-                board->board[idx].content = 'P';
-                board->pacmans[0].pos_x = x;
-                board->pacmans[0].pos_y = y;
-                board->pacmans[0].alive = 1;
-                board->pacmans[0].points = points;
-                board->pacmans[0].current_move = 0;
-                pacman_placed = 1;
+    // Place Pacman at position (1,1) if no PAC file, otherwise find first empty space
+    if (board->pacman_file[0] == '\0') {
+        // No PAC file - place at (1,1)
+        int idx = 1 * board->width + 1;
+        board->board[idx].content = 'P';
+        board->pacmans[0].pos_x = 1;
+        board->pacmans[0].pos_y = 1;
+        board->pacmans[0].alive = 1;
+        board->pacmans[0].points = points;
+        board->pacmans[0].current_move = 0;
+    } else {
+        // PAC file exists - find first empty space
+        int pacman_placed = 0;
+        for (int y = 0; y < board->height && !pacman_placed; y++) {
+            for (int x = 0; x < board->width && !pacman_placed; x++) {
+                int idx = y * board->width + x;
+                if (board->board[idx].content == ' ' && !board->board[idx].has_portal) {
+                    board->board[idx].content = 'P';
+                    board->pacmans[0].pos_x = x;
+                    board->pacmans[0].pos_y = y;
+                    board->pacmans[0].alive = 1;
+                    board->pacmans[0].points = points;
+                    board->pacmans[0].current_move = 0;
+                    pacman_placed = 1;
+                }
             }
         }
     }
