@@ -13,17 +13,22 @@ static inline int parse_and_add_command(const char* line, command_t* moves, int 
     
     char cmd;
     int turns;
-    if (sscanf(line, "%c %d", &cmd, &turns) == 2) {
+    
+    // T command always has a number
+    if (sscanf(line, "%c %d", &cmd, &turns) == 2 && cmd == 'T') {
         moves[move_count].command = cmd;
         moves[move_count].turns = turns;
         moves[move_count].turns_left = turns;
         return move_count + 1;
-    } else if (sscanf(line, "%c", &cmd) == 1) {
+    }
+    // Other commands (A, W, S, D, R, C) are always single moves
+    else if (sscanf(line, "%c", &cmd) == 1 && cmd != 'T') {
         moves[move_count].command = cmd;
         moves[move_count].turns = 1;
         moves[move_count].turns_left = 1;
         return move_count + 1;
     }
+    
     return move_count;
 }
 
