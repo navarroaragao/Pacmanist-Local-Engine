@@ -21,7 +21,7 @@ static inline int parse_and_add_command(const char* line, command_t* moves, int 
         moves[move_count].turns_left = turns;
         return move_count + 1;
     }
-    // Other commands (A, W, S, D, R, C) are always single moves
+    // Other commands (A, W, S, D, R, C) are always single moves 
     else if (sscanf(line, "%c", &cmd) == 1 && cmd != 'T') {
         moves[move_count].command = cmd;
         moves[move_count].turns = 1;
