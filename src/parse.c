@@ -11,8 +11,8 @@
 static inline int parse_and_add_command(const char* line, command_t* moves, int move_count) {
     if (move_count >= MAX_MOVES) return move_count;
     
-    char cmd; // command character
-    int turns; // number of turns for the cmd
+    char cmd;
+    int turns;
     if (sscanf(line, "%c %d", &cmd, &turns) == 2) {
         moves[move_count].command = cmd;
         moves[move_count].turns = turns;
@@ -43,6 +43,23 @@ static inline void process_board_char(board_pos_t* pos, char ch) {
         pos->content = ' ';
         pos->has_dot = 0;
     }
+}
+
+// Helper function to process a board line
+static inline void process_board_line(board_t* board, const char* line, int board_line, int width) {
+    int row_offset = board_line * width;
+    for (int x = 0; x < width && line[x] != '\0'; x++) {
+        int idx = row_offset + x;
+        process_board_char(&board->board[idx], line[x]);
+    }
+}
+
+// Helper function to process command line
+static inline int process_command_line(const char* line, command_t* moves, int move_count, int has_passo, int has_pos) {
+    if (line[0] != '#' && line[0] != '\0' && has_passo && has_pos) {
+        return parse_and_add_command(line, moves, move_count);
+    }
+    return move_count;
 }
 
 // Parse behavior file for Pacman or Monster
@@ -78,9 +95,9 @@ int parse_pacman_ghost_file(const char* filename, command_t* moves, int* n_moves
                     } else if (strncmp(line_buffer, "POS", 3) == 0 && !has_pos) {
                         debug("Found POS line in file: %s\n", filename);
                         has_pos = 1;
-                    } else if (has_passo && has_pos) {
+                    } else {
                         // Movement commands
-                        move_count = parse_and_add_command(line_buffer, moves, move_count);
+                        move_count = process_command_line(line_buffer, moves, move_count, has_passo, has_pos);
                     }
                 }
                 
@@ -94,9 +111,7 @@ int parse_pacman_ghost_file(const char* filename, command_t* moves, int* n_moves
     // Process last line if EOF reached with pending data
     if (line_pos > 0) {
         line_buffer[line_pos] = '\0';
-        if (line_buffer[0] != '#' && line_buffer[0] != '\0' && has_passo && has_pos) {
-            move_count = parse_and_add_command(line_buffer, moves, move_count);
-        }
+        move_count = process_command_line(line_buffer, moves, move_count, has_passo, has_pos);
     }
     
     close(fd);
@@ -179,11 +194,7 @@ int parse_level_file(board_t* board, const char* level_dir) {
                     } else if (has_dim && has_tempo && has_pac && has_mon) {
                         // Board content
                         if (board_line < board->height) {
-                            int row_offset = board_line * width_cache;
-                            for (int x = 0; x < width_cache && line_buffer[x] != '\0'; x++) {
-                                int idx = row_offset + x;
-                                process_board_char(&board->board[idx], line_buffer[x]);
-                            }
+                            process_board_line(board, line_buffer, board_line, width_cache);
                             board_line++;
                         }
                     }
@@ -201,11 +212,7 @@ int parse_level_file(board_t* board, const char* level_dir) {
         line_buffer[line_pos] = '\0';
         if (line_buffer[0] != '#' && line_buffer[0] != '\0' && has_dim && has_tempo && has_pac && has_mon) {
             if (board_line < board->height) {
-                int row_offset = board_line * width_cache;
-                for (int x = 0; x < width_cache && line_buffer[x] != '\0'; x++) {
-                    int idx = row_offset + x;
-                    process_board_char(&board->board[idx], line_buffer[x]);
-                }
+                process_board_line(board, line_buffer, board_line, width_cache);
             }
         }
     }
