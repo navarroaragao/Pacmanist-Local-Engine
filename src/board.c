@@ -498,18 +498,9 @@ int load_level(board_t *board, int points, const char* level_dir) {
         board->pacmans[0].waiting = 0;
     }
 
-    // Place Pacman at position (1,1) if no PAC file, otherwise find first empty space
+    // Place Pacman based on whether PAC file exists
     if (board->pacman_file[0] == '\0') {
-        // No PAC file - place at (1,1)
-        int idx = 1 * board->width + 1;
-        board->board[idx].content = 'P';
-        board->pacmans[0].pos_x = 1;
-        board->pacmans[0].pos_y = 1;
-        board->pacmans[0].alive = 1;
-        board->pacmans[0].points = points;
-        board->pacmans[0].current_move = 0;
-    } else {
-        // PAC file exists - find first empty space
+        // No PAC file - place at first empty space
         int pacman_placed = 0;
         for (int y = 0; y < board->height && !pacman_placed; y++) {
             for (int x = 0; x < board->width && !pacman_placed; x++) {
@@ -524,6 +515,45 @@ int load_level(board_t *board, int points, const char* level_dir) {
                     pacman_placed = 1;
                 }
             }
+        }
+    } else {
+        // PAC file exists - read position from POS line
+        int fd = open(board->pacman_file, O_RDONLY);
+        if (fd != -1) {
+            char buf[1024];
+            ssize_t n = read(fd, buf, sizeof(buf) - 1);
+            if (n > 0) {
+                buf[n] = '\0';
+                // Find POS line that is not a comment
+                char* line = buf;
+                int pos_x = 1, pos_y = 1;
+                int found = 0;
+                while (line && *line) {
+                    // Skip leading whitespace
+                    while (*line == ' ' || *line == '\t') line++;
+                    // Check if line starts with POS (not a comment)
+                    if (*line != '#' && strncmp(line, "POS", 3) == 0) {
+                        if (sscanf(line, "POS %d %d", &pos_y, &pos_x) == 2) {
+                            board->pacmans[0].pos_x = pos_x;
+                            board->pacmans[0].pos_y = pos_y;
+                            int idx = pos_y * board->width + pos_x;
+                            board->board[idx].content = 'P';
+                            board->pacmans[0].alive = 1;
+                            board->pacmans[0].points = points;
+                            board->pacmans[0].current_move = 0;
+                            found = 1;
+                            break;
+                        }
+                    }
+                    // Move to next line
+                    line = strchr(line, '\n');
+                    if (line) line++;
+                }
+                if (!found) {
+                    debug("Pacman: Failed to find POS command\n");
+                }
+            }
+            close(fd);
         }
     }
 
