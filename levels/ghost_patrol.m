@@ -1,6 +1,6 @@
 # Ghost Patrol - Horizontal and vertical patrol pattern
 PASSO 0
-POS 1 1
+POS 4 1
 # Patrol right
 D
 D

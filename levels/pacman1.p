@@ -1,7 +1,7 @@
 # Pacman behavior for level 1 (1.lvl)
 # Simple exploration pattern for 6x6 board
 PASSO 0
-POS 1 1
+POS 0 2
 # Move right exploring
 D
 D
