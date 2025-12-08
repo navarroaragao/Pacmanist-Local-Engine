@@ -135,12 +135,15 @@ int parse_level_file(board_t* board, const char* level_dir) {
         return -1;
     }
 
+    // Initialize pacman_file as empty (manual control by default)
+    board->pacman_file[0] = '\0';
+
     char buffer[256];
     char line_buffer[512];
     int line_pos = 0;
     ssize_t bytes_read;
     int board_line = 0;
-    int has_dim = 0, has_tempo = 0, has_pac = 0, has_mon = 0;
+    int has_dim = 0, has_tempo = 0, has_mon = 0;
     int width_cache = 0;
 
     while ((bytes_read = read(fd, buffer, sizeof(buffer))) > 0) {
@@ -168,14 +171,13 @@ int parse_level_file(board_t* board, const char* level_dir) {
                     } else if (strncmp(line_buffer, "TEMPO ", 6) == 0 && !has_tempo) {
                         sscanf(line_buffer, "TEMPO %d", &board->tempo);
                         has_tempo = 1;
-                    } else if (strncmp(line_buffer, "PAC", 3) == 0 && !has_pac) {
+                    } else if (strncmp(line_buffer, "PAC", 3) == 0) {
                         char pac_file[128];
                         if (sscanf(line_buffer, "PAC %127s", pac_file) == 1) {
                             snprintf(board->pacman_file, sizeof(board->pacman_file), "%s/%s", level_dir, pac_file);
                         } else {
                             board->pacman_file[0] = '\0';
                         }
-                        has_pac = 1;
                     } else if (strncmp(line_buffer, "MON", 3) == 0 && !has_mon) {
                         char* mon_start = strchr(line_buffer, ' ');
                         if (mon_start) {
@@ -196,7 +198,7 @@ int parse_level_file(board_t* board, const char* level_dir) {
                             }
                         }
                         has_mon = 1;
-                    } else if (has_dim && has_tempo && has_pac && has_mon) {
+                    } else if (has_dim && has_tempo && has_mon) {
                         // Board content
                         if (board_line < board->height) {
                             process_board_line(board, line_buffer, board_line, width_cache);
@@ -215,7 +217,7 @@ int parse_level_file(board_t* board, const char* level_dir) {
     // Process last line if EOF reached with pending data
     if (line_pos > 0) {
         line_buffer[line_pos] = '\0';
-        if (line_buffer[0] != '#' && line_buffer[0] != '\0' && has_dim && has_tempo && has_pac && has_mon) {
+        if (line_buffer[0] != '#' && line_buffer[0] != '\0' && has_dim && has_tempo && has_mon) {
             if (board_line < board->height) {
                 process_board_line(board, line_buffer, board_line, width_cache);
             }
