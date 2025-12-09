@@ -50,9 +50,7 @@ void* pacman_thread(void* arg) {
         // File-controlled movement only
         command_t* play = &pacman->moves[pacman->current_move % pacman->n_moves];
         
-        pthread_mutex_lock(&board->display_mutex);
         int result = move_pacman(board, pac_index, play);
-        pthread_mutex_unlock(&board->display_mutex);
         
         if (result == REACHED_PORTAL) {
             set_game_result(board, NEXT_LEVEL);
@@ -83,10 +81,7 @@ void* ghost_thread(void* arg) {
         }
         
         command_t* cmd = &ghost->moves[ghost->current_move % ghost->n_moves];
-        
-        pthread_mutex_lock(&board->display_mutex);
         move_ghost(board, ghost_index, cmd);
-        pthread_mutex_unlock(&board->display_mutex);
         
         // Check if pacman died
         if (!board->pacmans[0].alive) {
@@ -145,9 +140,7 @@ void* input_thread(void* arg) {
             user_cmd.turns = 1;
             user_cmd.turns_left = 1;
             
-            pthread_mutex_lock(&board->display_mutex);
             int result = move_pacman(board, 0, &user_cmd);
-            pthread_mutex_unlock(&board->display_mutex);
             
             if (result == REACHED_PORTAL) {
                 set_game_result(board, NEXT_LEVEL);
