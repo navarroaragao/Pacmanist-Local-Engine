@@ -63,10 +63,10 @@ int terminal_init() {
 
 
 void draw_board(board_t* board, int mode) {
-    // Clear the screen before redrawing
-    clear();
+    // Starting row for the game board (leave space for UI)
+    int start_row = 3;
 
-    // Draw the border/title
+    // Draw the border/title first (before clearing to reduce flicker)
     attron(COLOR_PAIR(5));
     mvprintw(0, 0, "=== PACMAN GAME ===");
     switch(mode) {
@@ -82,10 +82,6 @@ void draw_board(board_t* board, int mode) {
         mvprintw(1, 0, "Level: %s | Use W/A/S/D to move | Q to quit | G to quicksave ", board->level_name);
         break;
     }
-
-
-    // Starting row for the game board (leave space for UI)
-    int start_row = 3;
 
     // Draw the board
     for (int y = 0; y < board->height; y++) {
