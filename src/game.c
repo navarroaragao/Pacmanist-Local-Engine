@@ -280,6 +280,14 @@ int main(int argc, char** argv) {
             if(result == NEXT_LEVEL) {
                 screen_refresh(&game_board, DRAW_WIN);
                 sleep_ms(game_board.tempo);
+                
+                // If in child process (save active), exit with code 2 for victory
+                if (is_child_process) {
+                    unload_level(&game_board);
+                    close_debug_file();
+                    exit(2);
+                }
+                
                 current_level_index++; // Avançar para o próximo nível
                 break;
             }
@@ -312,11 +320,20 @@ int main(int argc, char** argv) {
                         int status;
                         waitpid(pid, &status, 0);
                         
-                        // Check if child exited with FORCE_QUIT signal (exit code 1)
-                        if (WIFEXITED(status) && WEXITSTATUS(status) == 1) {
-                            // Child was force quit with Q, so parent should also quit
-                            end_game = true;
-                            break;
+                        // Check exit code from child
+                        if (WIFEXITED(status)) {
+                            int exit_code = WEXITSTATUS(status);
+                            
+                            if (exit_code == 1) {
+                                // Child was force quit with Q, so parent should also quit
+                                end_game = true;
+                                break;
+                            } else if (exit_code == 2) {
+                                // Child won the level, parent should advance
+                                current_level_index++;
+                                break;
+                            }
+                            // exit_code == 0 means death, restore save (continue below)
                         }
                         
                         // Don't cleanup/reinit terminal - just redraw
