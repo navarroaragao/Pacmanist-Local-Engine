@@ -120,6 +120,9 @@ int move_pacman(board_t* board, int pacman_index, command_t* command) {
         return INVALID_MOVE;
     }
 
+    // Lock display mutex first to synchronize with display thread
+    pthread_mutex_lock(&board->display_mutex);
+    
     int new_index = get_board_index(board, new_x, new_y);
     int old_index = get_board_index(board, pac->pos_x, pac->pos_y);
     
@@ -138,12 +141,14 @@ int move_pacman(board_t* board, int pacman_index, command_t* command) {
         board->board[old_index].content = ' ';
         board->board[new_index].content = 'P';
         unlock_positions(board, first_idx, second_idx);
+        pthread_mutex_unlock(&board->display_mutex);
         return REACHED_PORTAL;
     }
 
     // Check for walls
     if (target_content == 'W') {
         unlock_positions(board, first_idx, second_idx);
+        pthread_mutex_unlock(&board->display_mutex);
         return INVALID_MOVE;
     }
 
@@ -151,6 +156,7 @@ int move_pacman(board_t* board, int pacman_index, command_t* command) {
     if (target_content == 'M') {
         kill_pacman(board, pacman_index);
         unlock_positions(board, first_idx, second_idx);
+        pthread_mutex_unlock(&board->display_mutex);
         return DEAD_PACMAN;
     }
 
@@ -166,6 +172,7 @@ int move_pacman(board_t* board, int pacman_index, command_t* command) {
     board->board[new_index].content = 'P';
 
     unlock_positions(board, first_idx, second_idx);
+    pthread_mutex_unlock(&board->display_mutex);
     return VALID_MOVE;
 }
 
@@ -251,10 +258,14 @@ int move_ghost_charged(board_t* board, int ghost_index, char direction) {
     ghost_t* ghost = &board->ghosts[ghost_index];
     int new_x, new_y;
 
+    // Lock display mutex to synchronize with display thread
+    pthread_mutex_lock(&board->display_mutex);
+    
     ghost->charged = 0; //uncharge
     int result = move_ghost_charged_direction(board, ghost, direction, &new_x, &new_y);
     if (result == INVALID_MOVE) {
         debug("DEFAULT CHARGED MOVE - direction = %c\n", direction);
+        pthread_mutex_unlock(&board->display_mutex);
         return INVALID_MOVE;
     }
 
@@ -269,6 +280,8 @@ int move_ghost_charged(board_t* board, int ghost_index, char direction) {
     ghost->pos_y = new_y;
     // Update board - set new position
     board->board[new_index].content = 'M';
+    
+    pthread_mutex_unlock(&board->display_mutex);
     return result;
 }
 
@@ -299,8 +312,10 @@ int move_ghost(board_t* board, int ghost_index, command_t* command) {
             calculate_new_position(&new_x, &new_y, direction);
             break;
         case 'C': // Charge
+            pthread_mutex_lock(&board->display_mutex);
             ghost->current_move += 1;
             ghost->charged = 1;
+            pthread_mutex_unlock(&board->display_mutex);
             return VALID_MOVE;
         case 'T': // Wait
             if (command->turns_left == 1) {
@@ -323,6 +338,9 @@ int move_ghost(board_t* board, int ghost_index, command_t* command) {
         return INVALID_MOVE;
     }
 
+    // Lock display mutex first to synchronize with display thread
+    pthread_mutex_lock(&board->display_mutex);
+    
     // Check board position
     int new_index = get_board_index(board, new_x, new_y);
     int old_index = get_board_index(board, ghost->pos_x, ghost->pos_y);
@@ -341,6 +359,7 @@ int move_ghost(board_t* board, int ghost_index, command_t* command) {
     // Check for walls and ghosts
     if (target_content == 'W' || target_content == 'M') {
         unlock_positions(board, first_idx, second_idx);
+        pthread_mutex_unlock(&board->display_mutex);
         return INVALID_MOVE;
     }
 
@@ -361,6 +380,7 @@ int move_ghost(board_t* board, int ghost_index, command_t* command) {
     board->board[new_index].content = 'M';
     
     unlock_positions(board, first_idx, second_idx);
+    pthread_mutex_unlock(&board->display_mutex);
     return result;
 }
 

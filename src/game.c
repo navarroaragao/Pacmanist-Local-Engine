@@ -23,9 +23,11 @@ typedef struct {
 
 // Helper function to set game result and stop game
 static inline void set_game_result(board_t* board, int result) {
+    pthread_mutex_lock(&board->display_mutex);
     board->game_result = result;
     board->level_complete = true;
     board->game_running = false;
+    pthread_mutex_unlock(&board->display_mutex);
 }
 
 // Helper function for adaptive sleep based on tempo
@@ -42,8 +44,14 @@ void* pacman_thread(void* arg) {
     
     pacman_t* pacman = &board->pacmans[pac_index];
     
-    while (board->game_running) {
-        if (!pacman->alive || board->level_complete) {
+    while (1) {
+        pthread_mutex_lock(&board->display_mutex);
+        int running = board->game_running;
+        int alive = pacman->alive;
+        int complete = board->level_complete;
+        pthread_mutex_unlock(&board->display_mutex);
+        
+        if (!running || !alive || complete) {
             break;
         }
         
@@ -75,16 +83,22 @@ void* ghost_thread(void* arg) {
     
     ghost_t* ghost = &board->ghosts[ghost_index];
     
-    while (board->game_running) {
-        if (board->level_complete) {
+    while (1) {
+        pthread_mutex_lock(&board->display_mutex);
+        int running = board->game_running;
+        int complete = board->level_complete;
+        int alive = board->pacmans[0].alive;
+        pthread_mutex_unlock(&board->display_mutex);
+        
+        if (!running || complete) {
             break;
         }
         
         command_t* cmd = &ghost->moves[ghost->current_move % ghost->n_moves];
         move_ghost(board, ghost_index, cmd);
         
-        // Check if pacman died
-        if (!board->pacmans[0].alive) {
+        // Check if pacman died (already loaded above)
+        if (!alive) {
             set_game_result(board, QUIT_GAME);
         }
         
@@ -98,8 +112,13 @@ void* ghost_thread(void* arg) {
 void* display_thread(void* arg) {
     board_t* board = (board_t*)arg;
     
-    while (board->game_running) {
+    while (1) {
         pthread_mutex_lock(&board->display_mutex);
+        int running = board->game_running;
+        if (!running) {
+            pthread_mutex_unlock(&board->display_mutex);
+            break;
+        }
         
         draw_board(board, DRAW_MENU);
         refresh_screen();
@@ -118,7 +137,14 @@ void* input_thread(void* arg) {
     board_t* board = (board_t*)arg;
     pacman_t* pacman = &board->pacmans[0];
     
-    while (board->game_running) {
+    while (1) {
+        pthread_mutex_lock(&board->display_mutex);
+        int running = board->game_running;
+        pthread_mutex_unlock(&board->display_mutex);
+        
+        if (!running) {
+            break;
+        }
         char input = get_input();
         
         // Allow Q to quit in any mode
@@ -307,7 +333,7 @@ int main(int argc, char** argv) {
                         pthread_mutex_destroy(&game_board.display_mutex);
                         pthread_mutex_init(&game_board.display_mutex, NULL);
                         
-                        // Child continues playing - reset game state
+                        // Child continues playing - reset game state (no mutex needed, just reinitialized)
                         game_board.game_running = true;
                         game_board.level_complete = false;
                         game_board.game_result = CONTINUE_PLAY;
@@ -340,19 +366,21 @@ int main(int argc, char** argv) {
                         pthread_mutex_lock(&game_board.display_mutex);
                         draw_board(&game_board, DRAW_MENU);
                         refresh_screen();
-                        pthread_mutex_unlock(&game_board.display_mutex);
                         
                         // Parent resets and continues
                         game_board.game_running = true;
                         game_board.level_complete = false;
                         game_board.game_result = CONTINUE_PLAY;
+                        pthread_mutex_unlock(&game_board.display_mutex);
                         continue;
                     }
                 } else {
                     // Already in child process - ignore G command and continue playing
+                    pthread_mutex_lock(&game_board.display_mutex);
                     game_board.game_running = true;
                     game_board.level_complete = false;
                     game_board.game_result = CONTINUE_PLAY;
+                    pthread_mutex_unlock(&game_board.display_mutex);
                     continue;
                 }
             }
