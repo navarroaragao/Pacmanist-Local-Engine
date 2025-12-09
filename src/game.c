@@ -107,7 +107,7 @@ void* display_thread(void* arg) {
         pthread_mutex_unlock(&board->display_mutex);
         
         // Use a consistent display refresh rate to reduce flicker
-        sleep_ms(100); // Fixed 100ms refresh rate
+        sleep_ms(50); // 50ms refresh rate for more fluid animation
     }
     
     return NULL;
