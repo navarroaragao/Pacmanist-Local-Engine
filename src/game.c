@@ -13,6 +13,7 @@
 #define NEXT_LEVEL 1
 #define QUIT_GAME 2
 #define SAVE_STATE 3
+#define FORCE_QUIT 4
 
 // Thread argument structure
 typedef struct {
@@ -105,7 +106,8 @@ void* display_thread(void* arg) {
         
         pthread_mutex_unlock(&board->display_mutex);
         
-        adaptive_sleep(board);
+        // Use a consistent display refresh rate to reduce flicker
+        sleep_ms(100); // Fixed 100ms refresh rate
     }
     
     return NULL;
@@ -121,7 +123,7 @@ void* input_thread(void* arg) {
         
         // Allow Q to quit in any mode
         if (input == 'Q') {
-            set_game_result(board, QUIT_GAME);
+            set_game_result(board, FORCE_QUIT);
             break;
         }
         
@@ -299,10 +301,16 @@ int main(int argc, char** argv) {
                         int status;
                         waitpid(pid, &status, 0);
                         
-                        terminal_cleanup();
-                        terminal_init();
+                        // Check if child exited with FORCE_QUIT signal (exit code 1)
+                        if (WIFEXITED(status) && WEXITSTATUS(status) == 1) {
+                            // Child was force quit with Q, so parent should also quit
+                            end_game = true;
+                            break;
+                        }
                         
+                        // Don't cleanup/reinit terminal - just clear and redraw
                         pthread_mutex_lock(&game_board.display_mutex);
+                        clear();
                         draw_board(&game_board, DRAW_MENU);
                         refresh_screen();
                         pthread_mutex_unlock(&game_board.display_mutex);
@@ -322,15 +330,16 @@ int main(int argc, char** argv) {
                 }
             }
 
-            if(result == QUIT_GAME) {
+            if(result == QUIT_GAME || result == FORCE_QUIT) {
                 screen_refresh(&game_board, DRAW_GAME_OVER);
                 sleep_ms(game_board.tempo);
                 
                 if (is_child_process) {
                     unload_level(&game_board);
-                    terminal_cleanup();
+                    // Don't call terminal_cleanup() - it corrupts parent's terminal
                     close_debug_file();
-                    exit(0);
+                    // Exit with 1 for FORCE_QUIT (Q command), 0 for death (restore save)
+                    exit(result == FORCE_QUIT ? 1 : 0);
                 }
                 
                 end_game = true;
