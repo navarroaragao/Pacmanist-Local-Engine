@@ -257,6 +257,7 @@ int main(int argc, char** argv) {
     bool end_game = false;
     board_t game_board;
     int current_level_index = 0;
+    bool is_child_process = false;  // Persists across levels
 
     while (!end_game && current_level_index < level_count) {
         // Set level filename from the list
@@ -272,8 +273,6 @@ int main(int argc, char** argv) {
         refresh_screen();
         pthread_mutex_unlock(&game_board.display_mutex);
 
-        bool is_child_process = false;
-
         while(true) {
             int result = play_board(&game_board); 
 
@@ -281,14 +280,15 @@ int main(int argc, char** argv) {
                 screen_refresh(&game_board, DRAW_WIN);
                 sleep_ms(game_board.tempo);
                 
-                // If in child process (save active), exit with code 2 for victory
-                if (is_child_process) {
+                current_level_index++; // Avançar para o próximo nível
+                
+                // If child process and no more levels, exit successfully
+                if (is_child_process && current_level_index >= level_count) {
                     unload_level(&game_board);
                     close_debug_file();
-                    exit(2);
+                    exit(2);  // Exit code 2 for game completed
                 }
                 
-                current_level_index++; // Avançar para o próximo nível
                 break;
             }
 
@@ -329,8 +329,8 @@ int main(int argc, char** argv) {
                                 end_game = true;
                                 break;
                             } else if (exit_code == 2) {
-                                // Child won the level, parent should advance
-                                current_level_index++;
+                                // Child completed all levels, parent should also end
+                                end_game = true;
                                 break;
                             }
                             // exit_code == 0 means death, restore save (continue below)
