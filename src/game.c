@@ -293,11 +293,19 @@ int main(int argc, char** argv) {
 
             if(result == SAVE_STATE) {
                 if (!is_child_process) {
+                    // Lock mutex during fork to ensure consistent state
+                    pthread_mutex_lock(&game_board.display_mutex);
+                    
                     // Only fork if we're in the parent process
                     pid_t pid = fork();
                     
                     if (pid == 0) {
                         is_child_process = true;
+                        
+                        // In child: reinitialize mutex (was locked during fork)
+                        pthread_mutex_destroy(&game_board.display_mutex);
+                        pthread_mutex_init(&game_board.display_mutex, NULL);
+                        
                         // Child continues playing - reset game state
                         game_board.game_running = true;
                         game_board.level_complete = false;
@@ -305,6 +313,9 @@ int main(int argc, char** argv) {
                         continue; // Continue the game loop
 
                     } else if (pid > 0) {
+                        // Parent unlocks mutex immediately after fork
+                        pthread_mutex_unlock(&game_board.display_mutex);
+                        
                         int status;
                         waitpid(pid, &status, 0);
                         
