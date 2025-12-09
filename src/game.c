@@ -308,9 +308,8 @@ int main(int argc, char** argv) {
                             break;
                         }
                         
-                        // Don't cleanup/reinit terminal - just clear and redraw
+                        // Don't cleanup/reinit terminal - just redraw
                         pthread_mutex_lock(&game_board.display_mutex);
-                        clear();
                         draw_board(&game_board, DRAW_MENU);
                         refresh_screen();
                         pthread_mutex_unlock(&game_board.display_mutex);
