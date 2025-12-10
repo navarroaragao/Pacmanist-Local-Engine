@@ -290,7 +290,7 @@ int main(int argc, char** argv) {
     bool end_game = false;
     board_t game_board;
     int current_level_index = 0;
-    bool is_child_process = false;  // Persists across levels
+    bool has_saved_state = false;  // Track if a save state exists
 
     while (!end_game && current_level_index < level_count) {
         // Set level filename from the list
@@ -311,70 +311,57 @@ int main(int argc, char** argv) {
 
             if(result == NEXT_LEVEL) {
                 screen_refresh(&game_board, DRAW_WIN);
-                sleep_ms(game_board.tempo);
-                
-                current_level_index++; // Avançar para o próximo nível
-                
-                // If child process and no more levels, exit successfully
-                if (is_child_process && current_level_index >= level_count) {
-                    unload_level(&game_board);
-                    close_debug_file();
-                    exit(2);  // Exit code 2 for game completed
-                }
-                
+                current_level_index++;
                 break;
             }
 
             if(result == SAVE_STATE) {
-                if (!is_child_process) {
-                    // Lock mutex during fork to ensure consistent state
+                // Only save if no save state exists yet
+                if (!has_saved_state) {
                     pthread_mutex_lock(&game_board.display_mutex);
                     
-                    // Only fork if we're in the parent process
                     pid_t pid = fork();
                     
                     if (pid == 0) {
-                        is_child_process = true;
+                        // Child process continues playing
+                        has_saved_state = true;  // Mark that we're in child (save exists in parent)
                         
-                        // In child: reinitialize mutex (was locked during fork)
                         pthread_mutex_destroy(&game_board.display_mutex);
                         pthread_mutex_init(&game_board.display_mutex, NULL);
                         
-                        // Child continues playing - reset game state (no mutex needed, just reinitialized)
                         game_board.game_running = true;
                         game_board.level_complete = false;
                         game_board.game_result = CONTINUE_PLAY;
-                        continue; // Continue the game loop
+                        continue;
 
                     } else if (pid > 0) {
-                        // Parent unlocks mutex immediately after fork
+                        // Parent waits and holds the saved state
                         pthread_mutex_unlock(&game_board.display_mutex);
                         
                         int status;
                         waitpid(pid, &status, 0);
                         
-                        // Check exit code from child
+                        // Child exited, check why
                         if (WIFEXITED(status)) {
                             int exit_code = WEXITSTATUS(status);
                             
                             if (exit_code == 1) {
-                                // Child was force quit with Q, so parent should also quit
+                                // Child pressed Q, parent exits too
                                 end_game = true;
                                 break;
                             } else if (exit_code == 2) {
-                                // Child completed all levels, parent should also end
+                                // Child completed all levels
                                 end_game = true;
                                 break;
                             }
-                            // exit_code == 0 means death, restore save (continue below)
+                            // exit_code == 0 means death, restore from save
                         }
                         
-                        // Don't cleanup/reinit terminal - just redraw
+                        // Restore the saved state (parent continues from save point)
                         pthread_mutex_lock(&game_board.display_mutex);
                         draw_board(&game_board, DRAW_MENU);
                         refresh_screen();
                         
-                        // Parent resets and continues
                         game_board.game_running = true;
                         game_board.level_complete = false;
                         game_board.game_result = CONTINUE_PLAY;
@@ -382,7 +369,7 @@ int main(int argc, char** argv) {
                         continue;
                     }
                 } else {
-                    // Already in child process - ignore G command and continue playing
+                    // Already has a saved state (we're in child), ignore G command
                     pthread_mutex_lock(&game_board.display_mutex);
                     game_board.game_running = true;
                     game_board.level_complete = false;
@@ -394,13 +381,11 @@ int main(int argc, char** argv) {
 
             if(result == QUIT_GAME || result == FORCE_QUIT) {
                 screen_refresh(&game_board, DRAW_GAME_OVER);
-                sleep_ms(game_board.tempo);
                 
-                if (is_child_process) {
+                // If we have a saved state, we're in the child process
+                if (has_saved_state) {
                     unload_level(&game_board);
-                    // Don't call terminal_cleanup() - it corrupts parent's terminal
                     close_debug_file();
-                    // Exit with 1 for FORCE_QUIT (Q command), 0 for death (restore save)
                     exit(result == FORCE_QUIT ? 1 : 0);
                 }
                 
@@ -415,6 +400,13 @@ int main(int argc, char** argv) {
         print_board(&game_board);
         unload_level(&game_board);
     }    
+
+    // If we have a saved state (child process) and completed all levels, exit with code 2
+    if (has_saved_state && !end_game) {
+        terminal_cleanup();
+        close_debug_file();
+        exit(2);
+    }
 
     terminal_cleanup();
 
