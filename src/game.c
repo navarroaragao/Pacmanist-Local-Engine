@@ -30,11 +30,6 @@ static inline void set_game_result(board_t* board, int result) {
     pthread_mutex_unlock(&board->display_mutex);
 }
 
-// Helper function for adaptive sleep based on tempo
-static inline void adaptive_sleep(board_t* board) {
-    sleep_ms(board->tempo > 0 ? board->tempo : 50);
-}
-
 // Pacman thread function
 void* pacman_thread(void* arg) {
     thread_arg_t* targ = (thread_arg_t*)arg;
@@ -49,6 +44,7 @@ void* pacman_thread(void* arg) {
         int running = board->game_running;
         int alive = pacman->alive;
         int complete = board->level_complete;
+        int tempo = board->tempo;
         pthread_mutex_unlock(&board->display_mutex);
         
         if (!running || !alive || complete) {
@@ -68,7 +64,10 @@ void* pacman_thread(void* arg) {
             set_game_result(board, SAVE_STATE);
         }
         
-        adaptive_sleep(board);
+        // Respect the tempo
+        if (tempo > 0) {
+            sleep_ms(tempo);
+        }
     }
     
     return NULL;
@@ -88,6 +87,7 @@ void* ghost_thread(void* arg) {
         int running = board->game_running;
         int complete = board->level_complete;
         int alive = board->pacmans[0].alive;
+        int tempo = board->tempo;
         pthread_mutex_unlock(&board->display_mutex);
         
         if (!running || complete) {
@@ -102,7 +102,10 @@ void* ghost_thread(void* arg) {
             set_game_result(board, QUIT_GAME);
         }
         
-        adaptive_sleep(board);
+        // Respect the tempo
+        if (tempo > 0) {
+            sleep_ms(tempo);
+        }
     }
     
     return NULL;
@@ -140,12 +143,18 @@ void* input_thread(void* arg) {
     while (1) {
         pthread_mutex_lock(&board->display_mutex);
         int running = board->game_running;
-        pthread_mutex_unlock(&board->display_mutex);
         
         if (!running) {
+            pthread_mutex_unlock(&board->display_mutex);
             break;
         }
+        
         char input = get_input();
+        pthread_mutex_unlock(&board->display_mutex);
+        
+        if (input == '\0') {
+            continue;
+        }
         
         // Q e G só funcionam quando NÃO estamos a ler de ficheiro
         if (pacman->n_moves == 0) {
@@ -179,8 +188,6 @@ void* input_thread(void* arg) {
                 set_game_result(board, SAVE_STATE);
             }
         }
-        
-        sleep_ms(50); // Poll input every 50ms
     }
     
     return NULL;
@@ -193,7 +200,7 @@ void screen_refresh(board_t * game_board, int mode) {
     refresh_screen();
     pthread_mutex_unlock(&game_board->display_mutex);
     if(game_board->tempo != 0)
-        sleep_ms(game_board->tempo);       
+        sleep_ms(game_board->tempo);
 }
 
 int play_board(board_t * game_board) {
