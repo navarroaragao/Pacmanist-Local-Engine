@@ -272,9 +272,12 @@ int main(int argc, char** argv) {
     while ((entry = readdir(dir)) != NULL && level_count < MAX_LEVELS) {
         char* ext = strrchr(entry->d_name, '.');
         if (ext && strcmp(ext, ".lvl") == 0) {
-            strncpy(level_files[level_count], entry->d_name, MAX_FILENAME - 1);
-            level_files[level_count][MAX_FILENAME - 1] = '\0';
-            level_count++;
+            size_t name_len = strlen(entry->d_name);
+            if (name_len < MAX_FILENAME) {
+                strncpy(level_files[level_count], entry->d_name, MAX_FILENAME - 1);
+                level_files[level_count][MAX_FILENAME - 1] = '\0';
+                level_count++;
+            }
         }
     }
     closedir(dir);
@@ -301,7 +304,8 @@ int main(int argc, char** argv) {
 
     while (!end_game && current_level_index < level_count) {
         // Set level filename from the list
-        snprintf(game_board.level_name, sizeof(game_board.level_name), "%s", level_files[current_level_index]);
+        strncpy(game_board.level_name, level_files[current_level_index], sizeof(game_board.level_name) - 1);
+        game_board.level_name[sizeof(game_board.level_name) - 1] = '\0';
         
         if (load_level(&game_board, accumulated_points, level_dir) != 0) {
             debug("Failed to load level %s\n", level_files[current_level_index]);
