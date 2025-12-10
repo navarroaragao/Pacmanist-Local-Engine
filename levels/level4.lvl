@@ -1,6 +1,7 @@
 # Level 4 - Advanced Challenge
 DIM 10 12
 TEMPO 100
+PAC pacman4.p
 MON ghost_patrol.m ghost_hunter.m
 # Board layout: Complex maze with strategic portal placement
 XXXXXXXXXXXX
