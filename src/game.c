@@ -147,16 +147,19 @@ void* input_thread(void* arg) {
         }
         char input = get_input();
         
-        // Allow Q to quit in any mode
-        if (input == 'Q') {
-            set_game_result(board, FORCE_QUIT);
-            break;
-        }
-        
-        // Allow G (quicksave) in any mode
-        if (input == 'G') {
-            set_game_result(board, SAVE_STATE);
-            break;
+        // Q e G só funcionam quando NÃO estamos a ler de ficheiro
+        if (pacman->n_moves == 0) {
+            // Allow Q to quit in user input mode
+            if (input == 'Q') {
+                set_game_result(board, FORCE_QUIT);
+                break;
+            }
+            
+            // Allow G (quicksave) in user input mode
+            if (input == 'G') {
+                set_game_result(board, SAVE_STATE);
+                break;
+            }
         }
         
         // Handle user-controlled pacman movement
@@ -198,6 +201,9 @@ int play_board(board_t * game_board) {
     pthread_t display_tid, input_tid, pacman_tid;
     pthread_t ghost_tids[MAX_GHOSTS];
     
+    // Track if pacman thread was created
+    bool pacman_thread_created = false;
+    
     // Start display thread
     pthread_create(&display_tid, NULL, display_thread, game_board);
     
@@ -210,6 +216,7 @@ int play_board(board_t * game_board) {
         arg->board = game_board;
         arg->character_index = 0;
         pthread_create(&pacman_tid, NULL, pacman_thread, arg);
+        pacman_thread_created = true;
     }
     
     // Start ghost threads
@@ -224,7 +231,7 @@ int play_board(board_t * game_board) {
     pthread_join(input_tid, NULL);
     pthread_join(display_tid, NULL);
     
-    if (game_board->pacmans[0].n_moves > 0) {
+    if (pacman_thread_created) {
         pthread_join(pacman_tid, NULL);
     }
     
