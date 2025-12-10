@@ -3,14 +3,12 @@
 #include <stdlib.h>
 #include <ctype.h>
 
-// Helper function to draw character with color
 static inline void draw_with_color(char ch, int color_pair, int attributes) {
     attron(color_pair | attributes);
     addch(ch);
     attroff(color_pair | attributes);
 }
 
-// Helper function to check if ghost is charged at position
 static inline int is_ghost_charged_at(board_t* board, int x, int y) {
     for (int g = 0; g < board->n_ghosts; g++) {
         ghost_t* ghost = &board->ghosts[g];
@@ -23,39 +21,31 @@ static inline int is_ghost_charged_at(board_t* board, int x, int y) {
 
 
 int terminal_init() {
-    // Initialize ncurses mode
+
     initscr();
 
-    // Disable line buffering - get characters immediately
     cbreak();
 
-    // Don't echo typed characters to the screen
     noecho();
 
-    // Enable special keys (arrow keys, function keys, etc.)
     keypad(stdscr, TRUE);
 
-    // Make getch() non-blocking (return ERR if no input)
     nodelay(stdscr, TRUE);
 
-    // Hide the cursor
     curs_set(0);
 
-    // Enable color if terminal supports it
     if (has_colors()) {
         start_color();
 
-        // Define color pairs (foreground, background)
-        init_pair(1, COLOR_YELLOW, COLOR_BLACK);  // Pacman
-        init_pair(2, COLOR_RED, COLOR_BLACK);     // Ghosts
-        init_pair(3, COLOR_BLUE, COLOR_BLACK);    // Walls
-        init_pair(4, COLOR_WHITE, COLOR_BLACK);   // Points/dots
-        init_pair(5, COLOR_GREEN, COLOR_BLACK);   // UI elements
-        init_pair(6, COLOR_MAGENTA, COLOR_BLACK); // Extra
-        init_pair(7, COLOR_CYAN, COLOR_BLACK);    // Extra
+        init_pair(1, COLOR_YELLOW, COLOR_BLACK);  
+        init_pair(2, COLOR_RED, COLOR_BLACK);     
+        init_pair(3, COLOR_BLUE, COLOR_BLACK);    
+        init_pair(4, COLOR_WHITE, COLOR_BLACK);   
+        init_pair(5, COLOR_GREEN, COLOR_BLACK);   
+        init_pair(6, COLOR_MAGENTA, COLOR_BLACK); 
+        init_pair(7, COLOR_CYAN, COLOR_BLACK);    
     }
 
-    // Clear the screen
     clear();
 
     return 0;
@@ -63,10 +53,8 @@ int terminal_init() {
 
 
 void draw_board(board_t* board, int mode) {
-    // Clear the screen before redrawing
     clear();
 
-    // Draw the border/title
     attron(COLOR_PAIR(5));
     mvprintw(0, 0, "=== PACMAN GAME ===");
     switch(mode) {
@@ -83,35 +71,30 @@ void draw_board(board_t* board, int mode) {
         break;
     }
 
-
-    // Starting row for the game board (leave space for UI)
     int start_row = 3;
 
-    // Draw the board
     for (int y = 0; y < board->height; y++) {
         for (int x = 0; x < board->width; x++) {
             int index = y * board->width + x;
             char ch = board->board[index].content;
 
-            // Move cursor to position
             move(start_row + y, x);
 
-            // Draw with appropriate color
             switch (ch) {
-                case 'W': // Wall
+                case 'W': 
                     draw_with_color('#', COLOR_PAIR(3), 0);
                     break;
 
-                case 'P': // Pacman
+                case 'P': 
                     draw_with_color('C', COLOR_PAIR(1), A_BOLD);
                     break;
 
-                case 'M': // Monster/Ghost
+                case 'M': 
                     draw_with_color('M', COLOR_PAIR(2) | A_BOLD, 
                                    is_ghost_charged_at(board, x, y) ? A_DIM : 0);
                     break;
 
-                case ' ': // Empty space
+                case ' ': 
                     if (board->board[index].has_portal) {
                         draw_with_color('@', COLOR_PAIR(6), 0);
                     }
@@ -129,10 +112,9 @@ void draw_board(board_t* board, int mode) {
         }
     }
 
-    // Draw score/status at the bottom
     attron(COLOR_PAIR(5));
     mvprintw(start_row + board->height + 1, 0, "Points: %d",
-             board->pacmans[0].points); // Assuming first pacman for now
+             board->pacmans[0].points); 
     attroff(COLOR_PAIR(5));
 }
 
@@ -144,17 +126,14 @@ void draw(char c, int colour_i, int pos_x, int pos_y) {
 }
 
 void refresh_screen() {
-    // Update the physical screen with the virtual screen
     refresh();
 }
 
 char get_input() {
-    // Get a character from the keyboard
     int ch = getch();
 
-    // getch() returns ERR if no input is available
     if (ch == ERR) {
-        return '\0'; // No input
+        return '\0'; 
     }
 
     ch = toupper((char)ch);
@@ -175,6 +154,6 @@ char get_input() {
 }
 
 void terminal_cleanup() {
-    // Restore terminal settings and clean up ncurses
+    
     endwin();
 }

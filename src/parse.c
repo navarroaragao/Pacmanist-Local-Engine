@@ -7,21 +7,19 @@
 #include <string.h>
 #include <pthread.h>
 
-// Helper function to parse and add movement command
 static inline int parse_and_add_command(const char* line, command_t* moves, int move_count) {
     if (move_count >= MAX_MOVES) return move_count;
     
     char cmd;
     int turns;
     
-    // T command always has a number
     if (sscanf(line, "%c %d", &cmd, &turns) == 2 && cmd == 'T') {
         moves[move_count].command = cmd;
         moves[move_count].turns = turns;
         moves[move_count].turns_left = turns;
         return move_count + 1;
     }
-    // Other commands (A, W, S, D, R, C) are always single moves 
+
     else if (sscanf(line, "%c", &cmd) == 1 && cmd != 'T') {
         moves[move_count].command = cmd;
         moves[move_count].turns = 1;
@@ -32,7 +30,6 @@ static inline int parse_and_add_command(const char* line, command_t* moves, int 
     return move_count;
 }
 
-// Helper function to process board character
 static inline void process_board_char(board_pos_t* pos, char ch) {
     if (ch == 'X') {
         pos->content = 'W';
@@ -50,7 +47,6 @@ static inline void process_board_char(board_pos_t* pos, char ch) {
     }
 }
 
-// Helper function to process a board line
 static inline void process_board_line(board_t* board, const char* line, int board_line, int width) {
     int row_offset = board_line * width;
     for (int x = 0; x < width && line[x] != '\0'; x++) {
@@ -59,7 +55,6 @@ static inline void process_board_line(board_t* board, const char* line, int boar
     }
 }
 
-// Helper function to process command line
 static inline int process_command_line(const char* line, command_t* moves, int move_count, int has_passo, int has_pos) {
     if (line[0] != '#' && line[0] != '\0' && has_passo && has_pos) {
         return parse_and_add_command(line, moves, move_count);
@@ -67,16 +62,15 @@ static inline int process_command_line(const char* line, command_t* moves, int m
     return move_count;
 }
 
-// Parse behavior file for Pacman or Monster
 int parse_pacman_ghost_file(const char* filename, command_t* moves, int* n_moves, int* passo) {
-    int fd = open(filename, O_RDONLY); // Open the behavior file
+    int fd = open(filename, O_RDONLY); 
     if (fd == -1) {
         debug("Failed to open behavior file: %s\n", filename);
         return -1;
     }
 
     char buffer[256];
-    char line_buffer[512]; // For incomplete lines
+    char line_buffer[512]; 
     int line_pos = 0;
     ssize_t bytes_read;
     int move_count = 0;
@@ -88,9 +82,7 @@ int parse_pacman_ghost_file(const char* filename, command_t* moves, int* n_moves
             
             if (c == '\n' || line_pos >= (int)sizeof(line_buffer) - 1) {
                 line_buffer[line_pos] = '\0';
-                // Skip comments and empty lines
                 if (line_buffer[0] != '#' && line_buffer[0] != '\0') {
-                    // Parse based on keyword
                     if (strncmp(line_buffer, "PASSO", 5) == 0 && !has_passo) {
                         if (sscanf(line_buffer, "PASSO %d", passo) != 1) {
                             *passo = 0;
@@ -101,7 +93,6 @@ int parse_pacman_ghost_file(const char* filename, command_t* moves, int* n_moves
                         debug("Found POS line in file: %s\n", filename);
                         has_pos = 1;
                     } else {
-                        // Movement commands
                         move_count = process_command_line(line_buffer, moves, move_count, has_passo, has_pos);
                     }
                 }
@@ -113,7 +104,6 @@ int parse_pacman_ghost_file(const char* filename, command_t* moves, int* n_moves
         }
     }
     
-    // Process last line if EOF reached with pending data
     if (line_pos > 0) {
         line_buffer[line_pos] = '\0';
         move_count = process_command_line(line_buffer, moves, move_count, has_passo, has_pos);
@@ -124,7 +114,6 @@ int parse_pacman_ghost_file(const char* filename, command_t* moves, int* n_moves
     return 0;
 }
 
-// Parse level file and load the board
 int parse_level_file(board_t* board, const char* level_dir) {
     char filepath[512];
     snprintf(filepath, sizeof(filepath), "%s/%s", level_dir, board->level_name);
@@ -135,7 +124,6 @@ int parse_level_file(board_t* board, const char* level_dir) {
         return -1;
     }
 
-    // Initialize pacman_file as empty (manual control by default)
     board->pacman_file[0] = '\0';
 
     char buffer[256];
@@ -153,9 +141,7 @@ int parse_level_file(board_t* board, const char* level_dir) {
             if (c == '\n' || line_pos >= (int)sizeof(line_buffer) - 1) {
                 line_buffer[line_pos] = '\0';
                 
-                // Skip comments and empty lines
                 if (line_buffer[0] != '#' && line_buffer[0] != '\0') {
-                    // Parse based on keyword
                     if (strncmp(line_buffer, "DIM ", 4) == 0 && !has_dim) {
                         if (sscanf(line_buffer, "DIM %d %d", &board->height, &board->width) != 2) {
                             close(fd);
@@ -163,7 +149,6 @@ int parse_level_file(board_t* board, const char* level_dir) {
                         }
                         width_cache = board->width;
                         board->board = calloc(board->width * board->height, sizeof(board_pos_t));
-                        // Initialize mutex for each position
                         for (int i = 0; i < board->width * board->height; i++) {
                             pthread_mutex_init(&board->board[i].pos_mutex, NULL);
                         }
@@ -199,7 +184,6 @@ int parse_level_file(board_t* board, const char* level_dir) {
                         }
                         has_mon = 1;
                     } else if (has_dim && has_tempo && has_mon) {
-                        // Board content
                         if (board_line < board->height) {
                             process_board_line(board, line_buffer, board_line, width_cache);
                             board_line++;
@@ -213,8 +197,7 @@ int parse_level_file(board_t* board, const char* level_dir) {
             }
         }
     }
-
-    // Process last line if EOF reached with pending data
+    
     if (line_pos > 0) {
         line_buffer[line_pos] = '\0';
         if (line_buffer[0] != '#' && line_buffer[0] != '\0' && has_dim && has_tempo && has_mon) {
