@@ -302,6 +302,7 @@ int main(int argc, char** argv) {
 
             if(result == NEXT_LEVEL) {
                 screen_refresh(&game_board, DRAW_WIN);
+                accumulated_points = game_board.pacmans[0].points;
                 current_level_index++;
                 break;
             }
