@@ -92,6 +92,4 @@ void debug(const char * format, ...);
 
 void print_board(board_t* board);
 
-void print_board(board_t* board);
-
 #endif

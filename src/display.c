@@ -3,6 +3,15 @@
 #include <stdlib.h>
 #include <ctype.h>
 
+#define COLOR_PACMAN 1
+#define COLOR_GHOST 2
+#define COLOR_WALL 3
+#define COLOR_DOT 4
+#define COLOR_UI 5
+#define COLOR_PORTAL 6
+
+#define UI_START_ROW 3
+
 static inline void draw_with_color(char ch, int color_pair, int attributes) {
     attron(color_pair | attributes);
     addch(ch);
@@ -55,7 +64,7 @@ int terminal_init() {
 void draw_board(board_t* board, int mode) {
     clear();
 
-    attron(COLOR_PAIR(5));
+    attron(COLOR_PAIR(COLOR_UI));
     mvprintw(0, 0, "=== PACMAN GAME ===");
     switch(mode) {
     case DRAW_GAME_OVER:
@@ -71,7 +80,7 @@ void draw_board(board_t* board, int mode) {
         break;
     }
 
-    int start_row = 3;
+    int start_row = UI_START_ROW;
 
     for (int y = 0; y < board->height; y++) {
         for (int x = 0; x < board->width; x++) {
@@ -82,24 +91,24 @@ void draw_board(board_t* board, int mode) {
 
             switch (ch) {
                 case 'W': 
-                    draw_with_color('#', COLOR_PAIR(3), 0);
+                    draw_with_color('#', COLOR_PAIR(COLOR_WALL), 0);
                     break;
 
                 case 'P': 
-                    draw_with_color('C', COLOR_PAIR(1), A_BOLD);
+                    draw_with_color('C', COLOR_PAIR(COLOR_PACMAN), A_BOLD);
                     break;
 
                 case 'M': 
-                    draw_with_color('M', COLOR_PAIR(2) | A_BOLD, 
+                    draw_with_color('M', COLOR_PAIR(COLOR_GHOST) | A_BOLD, 
                                    is_ghost_charged_at(board, x, y) ? A_DIM : 0);
                     break;
 
                 case ' ': 
                     if (board->board[index].has_portal) {
-                        draw_with_color('@', COLOR_PAIR(6), 0);
+                        draw_with_color('@', COLOR_PAIR(COLOR_PORTAL), 0);
                     }
                     else if (board->board[index].has_dot) {
-                        draw_with_color('.', COLOR_PAIR(4), 0);
+                        draw_with_color('.', COLOR_PAIR(COLOR_DOT), 0);
                     }
                     else
                         addch(' ');
@@ -112,10 +121,10 @@ void draw_board(board_t* board, int mode) {
         }
     }
 
-    attron(COLOR_PAIR(5));
+    attron(COLOR_PAIR(COLOR_UI));
     mvprintw(start_row + board->height + 1, 0, "Points: %d",
-             board->pacmans[0].points); 
-    attroff(COLOR_PAIR(5));
+             board->pacmans[0].points);
+    attroff(COLOR_PAIR(COLOR_UI));
 }
 
 void draw(char c, int colour_i, int pos_x, int pos_y) {

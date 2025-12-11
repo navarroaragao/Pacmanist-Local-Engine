@@ -9,9 +9,14 @@
 #include <string.h>
 #include <sys/stat.h>
 
+#define SMALL_BUFFER 128
+#define MEDIUM_BUFFER 512
+#define LARGE_BUFFER 1024
+#define PRINT_BUFFER 8192
+
 FILE * debugfile;
 
-static int find_and_kill_pacman(board_t* board, int new_x, int new_y) {
+static inline int find_and_kill_pacman(board_t* board, int new_x, int new_y) {
     for (int p = 0; p < board->n_pacmans; p++) {
         pacman_t* pac = &board->pacmans[p];
         if (pac->pos_x == new_x && pac->pos_y == new_y && pac->alive) {
@@ -28,7 +33,14 @@ static inline int get_board_index(board_t* board, int x, int y) {
 }
 
 static inline int is_valid_position(board_t* board, int x, int y) {
-    return (x >= 0 && x < board->width) && (y >= 0 && y < board->height); 
+    return x >= 0 && x < board->width && y >= 0 && y < board->height;
+}
+
+static inline void lock_positions(board_t* board, int first_idx, int second_idx) {
+    pthread_mutex_lock(&board->board[first_idx].pos_mutex);
+    if (first_idx != second_idx) {
+        pthread_mutex_lock(&board->board[second_idx].pos_mutex);
+    }
 }
 
 static inline void unlock_positions(board_t* board, int first_idx, int second_idx) {
@@ -118,10 +130,7 @@ int move_pacman(board_t* board, int pacman_index, command_t* command) {
     int first_idx = (old_index < new_index) ? old_index : new_index;
     int second_idx = (old_index < new_index) ? new_index : old_index;
     
-    pthread_mutex_lock(&board->board[first_idx].pos_mutex);
-    if (first_idx != second_idx) {
-        pthread_mutex_lock(&board->board[second_idx].pos_mutex);
-    }
+    lock_positions(board, first_idx, second_idx);
     
     char target_content = board->board[new_index].content;
 
@@ -321,10 +330,7 @@ int move_ghost(board_t* board, int ghost_index, command_t* command) {
     int first_idx = (old_index < new_index) ? old_index : new_index;
     int second_idx = (old_index < new_index) ? new_index : old_index;
     
-    pthread_mutex_lock(&board->board[first_idx].pos_mutex);
-    if (first_idx != second_idx) {
-        pthread_mutex_lock(&board->board[second_idx].pos_mutex);
-    }
+    lock_positions(board, first_idx, second_idx);
     
     char target_content = board->board[new_index].content;
 
@@ -354,10 +360,9 @@ int move_ghost(board_t* board, int ghost_index, command_t* command) {
 void kill_pacman(board_t* board, int pacman_index) {
     debug("Killing %d pacman\n\n", pacman_index);
     pacman_t* pac = &board->pacmans[pacman_index];
-    int index = pac->pos_y * board->width + pac->pos_x;
+    int index = get_board_index(board, pac->pos_x, pac->pos_y);
 
     board->board[index].content = ' ';
-
     pac->alive = 0;
 }
 
@@ -466,7 +471,7 @@ int load_level(board_t *board, int points, const char* level_dir) {
 
             int fd = open(board->ghosts_files[i], O_RDONLY);
             if (fd != -1) {
-                char buf[1024];
+                char buf[LARGE_BUFFER];
                 ssize_t n = read(fd, buf, sizeof(buf) - 1);
                 if (n > 0) {
                     buf[n] = '\0';
@@ -540,7 +545,7 @@ int load_level(board_t *board, int points, const char* level_dir) {
 
         int fd = open(board->pacman_file, O_RDONLY);
         if (fd != -1) {
-            char buf[1024];
+            char buf[LARGE_BUFFER];
             ssize_t n = read(fd, buf, sizeof(buf) - 1);
             if (n > 0) {
                 buf[n] = '\0';
@@ -609,7 +614,7 @@ void print_board(board_t *board) {
         return;
     }
 
-    char buffer[8192];
+    char buffer[PRINT_BUFFER];
     size_t offset = 0;
 
     offset += snprintf(buffer + offset, sizeof(buffer) - offset,

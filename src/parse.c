@@ -7,6 +7,11 @@
 #include <string.h>
 #include <pthread.h>
 
+#define READ_BUFFER_SIZE 256
+#define LINE_BUFFER_SIZE 512
+#define SMALL_BUFFER_SIZE 128
+#define LARGE_BUFFER_SIZE 1024
+
 static inline int parse_and_add_command(const char* line, command_t* moves, int move_count) {
     if (move_count >= MAX_MOVES) return move_count;
     
@@ -69,14 +74,14 @@ int parse_pacman_ghost_file(const char* filename, command_t* moves, int* n_moves
         return -1;
     }
 
-    char buffer[256];
-    char line_buffer[512]; 
+    char buffer[READ_BUFFER_SIZE];
+    char line_buffer[LINE_BUFFER_SIZE];
     int line_pos = 0;
     ssize_t bytes_read;
     int move_count = 0;
     int has_passo = 0, has_pos = 0;
 
-    while ((bytes_read = read(fd, buffer, sizeof(buffer))) > 0) {
+    while ((bytes_read = read(fd, buffer, READ_BUFFER_SIZE)) > 0) {
         for (ssize_t i = 0; i < bytes_read; i++) {
             char c = buffer[i];
             
@@ -126,15 +131,15 @@ int parse_level_file(board_t* board, const char* level_dir) {
 
     board->pacman_file[0] = '\0';
 
-    char buffer[256];
-    char line_buffer[512];
+    char buffer[READ_BUFFER_SIZE];
+    char line_buffer[LINE_BUFFER_SIZE];
     int line_pos = 0;
     ssize_t bytes_read;
     int board_line = 0;
     int has_dim = 0, has_tempo = 0, has_mon = 0;
     int width_cache = 0;
 
-    while ((bytes_read = read(fd, buffer, sizeof(buffer))) > 0) {
+    while ((bytes_read = read(fd, buffer, READ_BUFFER_SIZE)) > 0) {
         for (ssize_t i = 0; i < bytes_read; i++) {
             char c = buffer[i];
             
@@ -157,7 +162,7 @@ int parse_level_file(board_t* board, const char* level_dir) {
                         sscanf(line_buffer, "TEMPO %d", &board->tempo);
                         has_tempo = 1;
                     } else if (strncmp(line_buffer, "PAC", 3) == 0) {
-                        char pac_file[128];
+                        char pac_file[SMALL_BUFFER_SIZE];
                         if (sscanf(line_buffer, "PAC %127s", pac_file) == 1) {
                             snprintf(board->pacman_file, sizeof(board->pacman_file), "%s/%s", level_dir, pac_file);
                         } else {
@@ -168,9 +173,9 @@ int parse_level_file(board_t* board, const char* level_dir) {
                         if (mon_start) {
                             ++mon_start;
                             board->n_ghosts = 0;
-                            char mon_file[128];
-                            char line_copy[512];
-                            size_t copy_len = sizeof(line_copy) - 1;
+                            char mon_file[SMALL_BUFFER_SIZE];
+                            char line_copy[LINE_BUFFER_SIZE];
+                            size_t copy_len = LINE_BUFFER_SIZE - 1;
                             strncpy(line_copy, mon_start, copy_len);
                             line_copy[copy_len] = '\0';
                             char* token = strtok(line_copy, " ");
@@ -210,3 +215,4 @@ int parse_level_file(board_t* board, const char* level_dir) {
     close(fd);
     return 0;
 }
+    

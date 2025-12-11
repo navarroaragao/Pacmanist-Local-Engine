@@ -15,6 +15,12 @@
 #define SAVE_STATE 3
 #define FORCE_QUIT 4
 
+#define EXIT_CODE_DEATH 0
+#define EXIT_CODE_QUIT 1
+#define EXIT_CODE_COMPLETE 2
+
+#define DISPLAY_REFRESH_MS 50
+
 typedef struct {
     board_t* board;
     int character_index;
@@ -119,7 +125,7 @@ void* display_thread(void* arg) {
         
         pthread_mutex_unlock(&board->display_mutex);
         
-        sleep_ms(50); 
+        sleep_ms(DISPLAY_REFRESH_MS);
     }
     
     return NULL;
@@ -249,12 +255,8 @@ int main(int argc, char** argv) {
     while ((entry = readdir(dir)) != NULL && level_count < MAX_LEVELS) {
         char* ext = strrchr(entry->d_name, '.');
         if (ext && strcmp(ext, ".lvl") == 0) {
-            size_t name_len = strlen(entry->d_name);
-            if (name_len < MAX_FILENAME) {
-                strncpy(level_files[level_count], entry->d_name, MAX_FILENAME - 1);
-                level_files[level_count][MAX_FILENAME - 1] = '\0';
-                level_count++;
-            }
+            snprintf(level_files[level_count], MAX_FILENAME, "%s", entry->d_name);
+            level_count++;
         }
     }
     closedir(dir);
@@ -278,9 +280,12 @@ int main(int argc, char** argv) {
     bool has_saved_state = false;  
 
     while (!end_game && current_level_index < level_count) {
-       
-        strncpy(game_board.level_name, level_files[current_level_index], sizeof(game_board.level_name) - 1);
-        game_board.level_name[sizeof(game_board.level_name) - 1] = '\0';
+        size_t len = strlen(level_files[current_level_index]);
+        if (len >= sizeof(game_board.level_name)) {
+            len = sizeof(game_board.level_name) - 1;
+        }
+        memcpy(game_board.level_name, level_files[current_level_index], len);
+        game_board.level_name[len] = '\0';
         
         if (load_level(&game_board, accumulated_points, level_dir) != 0) {
             debug("Failed to load level %s\n", level_files[current_level_index]);
@@ -327,10 +332,10 @@ int main(int argc, char** argv) {
                         if (WIFEXITED(status)) {
                             int exit_code = WEXITSTATUS(status);
                             
-                            if (exit_code == 1) {
+                            if (exit_code == EXIT_CODE_QUIT) {
                                 end_game = true;
                                 break;
-                            } else if (exit_code == 2) {
+                            } else if (exit_code == EXIT_CODE_COMPLETE) {
                                 end_game = true;
                                 break;
                             }
@@ -363,7 +368,7 @@ int main(int argc, char** argv) {
                 if (has_saved_state) {
                     unload_level(&game_board);
                     close_debug_file();
-                    exit(result == FORCE_QUIT ? 1 : 0);
+                    exit(result == FORCE_QUIT ? EXIT_CODE_QUIT : EXIT_CODE_DEATH);
                 }
                 
                 end_game = true;
@@ -381,7 +386,7 @@ int main(int argc, char** argv) {
     if (has_saved_state && !end_game) {
         terminal_cleanup();
         close_debug_file();
-        exit(2);
+        exit(EXIT_CODE_COMPLETE);
     }
 
     terminal_cleanup();
