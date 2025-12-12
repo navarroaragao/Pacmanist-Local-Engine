@@ -1,6 +1,6 @@
-PASSO 1
-POS 1 1
-W
-D  
-S
-A  
+PASSO 0
+POS 2 2
+W 
+A 
+S 
+D 

@@ -37,9 +37,14 @@ static inline int is_valid_position(board_t* board, int x, int y) {
 }
 
 static inline void lock_positions(board_t* board, int first_idx, int second_idx) {
-    pthread_mutex_lock(&board->board[first_idx].pos_mutex);
-    if (first_idx != second_idx) {
+    if (first_idx == second_idx) {
+        pthread_mutex_lock(&board->board[first_idx].pos_mutex);
+    } else if (first_idx < second_idx) {
+        pthread_mutex_lock(&board->board[first_idx].pos_mutex);
         pthread_mutex_lock(&board->board[second_idx].pos_mutex);
+    } else {
+        pthread_mutex_lock(&board->board[second_idx].pos_mutex);
+        pthread_mutex_lock(&board->board[first_idx].pos_mutex);
     }
 }
 
