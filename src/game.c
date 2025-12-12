@@ -186,7 +186,6 @@ void* input_thread(void* arg) {
 }
 
 void screen_refresh(board_t * game_board, int mode) {
-    debug("REFRESH\n");
     pthread_mutex_lock(&game_board->display_mutex);
     draw_board(game_board, mode);
     refresh_screen();
@@ -288,7 +287,6 @@ int main(int argc, char** argv) {
         game_board.level_name[len] = '\0';
         
         if (load_level(&game_board, accumulated_points, level_dir) != 0) {
-            debug("Failed to load level %s\n", level_files[current_level_index]);
             break;
         }
         

@@ -241,7 +241,6 @@ static int move_ghost_charged_direction(board_t* board, ghost_t* ghost, char dir
             }
             break;
         default:
-            debug("DEFAULT CHARGED MOVE - direction = %c\n", direction);
             return INVALID_MOVE;
     }
     return VALID_MOVE;
@@ -256,7 +255,6 @@ int move_ghost_charged(board_t* board, int ghost_index, char direction) {
     ghost->charged = 0; 
     int result = move_ghost_charged_direction(board, ghost, direction, &new_x, &new_y);
     if (result == INVALID_MOVE) {
-        debug("DEFAULT CHARGED MOVE - direction = %c\n", direction);
         pthread_mutex_unlock(&board->display_mutex);
         return INVALID_MOVE;
     }
@@ -358,51 +356,11 @@ int move_ghost(board_t* board, int ghost_index, command_t* command) {
 }
 
 void kill_pacman(board_t* board, int pacman_index) {
-    debug("Killing %d pacman\n\n", pacman_index);
     pacman_t* pac = &board->pacmans[pacman_index];
     int index = get_board_index(board, pac->pos_x, pac->pos_y);
 
     board->board[index].content = ' ';
     pac->alive = 0;
-}
-
-int load_pacman(board_t* board, int points) {
-    board->board[1 * board->width + 1].content = 'P';
-    board->pacmans[0].pos_x = 1;
-    board->pacmans[0].pos_y = 1;
-    board->pacmans[0].alive = 1;
-    board->pacmans[0].points = points;
-    return 0;
-}
-
-int load_ghost(board_t* board) {
-    board->board[3 * board->width + 1].content = 'M';
-    board->ghosts[0].pos_x = 1;
-    board->ghosts[0].pos_y = 3;
-    board->ghosts[0].passo = 0;
-    board->ghosts[0].waiting = 0;
-    board->ghosts[0].current_move = 0;
-    board->ghosts[0].n_moves = 16;
-    for (int i = 0; i < 8; i++) {
-        board->ghosts[0].moves[i].command = 'D';
-        board->ghosts[0].moves[i].turns = 1; 
-    }
-    for (int i = 8; i < 16; i++) {
-        board->ghosts[0].moves[i].command = 'A';
-        board->ghosts[0].moves[i].turns = 1; 
-    }
-
-    board->board[2 * board->width + 4].content = 'M'; 
-    board->ghosts[1].pos_x = 4;
-    board->ghosts[1].pos_y = 2;
-    board->ghosts[1].passo = 1;
-    board->ghosts[1].waiting = 1;
-    board->ghosts[1].current_move = 0;
-    board->ghosts[1].n_moves = 1;
-    board->ghosts[1].moves[0].command = 'R'; 
-    board->ghosts[1].moves[0].turns = 1; 
-    
-    return 0;
 }
 
 int load_level(board_t *board, int points, const char* level_dir) {
@@ -415,47 +373,7 @@ int load_level(board_t *board, int points, const char* level_dir) {
     board->pacmans = calloc(board->n_pacmans, sizeof(pacman_t));
     
     if (parse_level_file(board, level_dir) != 0) {
-        debug("Failed to parse level file, loading static level\n");
-        
-        board->height = 6;
-        board->width = 8;
-        board->tempo = 100;
-        board->n_ghosts = 2;
-        board->board = calloc(board->width * board->height, sizeof(board_pos_t));
-        board->ghosts = calloc(board->n_ghosts, sizeof(ghost_t));
-        board->pacman_file[0] = '\0';
-        
-        for (int i = 0; i < board->height; i++) {
-            for (int j = 0; j < board->width; j++) {
-                int idx = i * board->width + j;
-                pthread_mutex_init(&board->board[idx].pos_mutex, NULL);
-                if (i == 0 || i == board->height - 1 || j == 0 || j == board->width - 1) {
-                    board->board[idx].content = 'W';
-                    board->board[idx].has_dot = 0;
-                } else if (i == board->height - 2 && j == board->width - 2) {
-                    board->board[idx].content = ' ';
-                    board->board[idx].has_portal = 1;
-                    board->board[idx].has_dot = 0;
-                } else {
-                    board->board[idx].content = ' ';
-                    board->board[idx].has_dot = 1;
-                }
-            }
-        }
-        
-        board->board[1 * board->width + 1].content = 'P';
-        board->pacmans[0].pos_x = 1;
-        board->pacmans[0].pos_y = 1;
-        board->pacmans[0].alive = 1;
-        board->pacmans[0].points = points;
-        board->pacmans[0].current_move = 0;
-        board->pacmans[0].n_moves = 0;
-        board->pacmans[0].passo = 0;
-        board->pacmans[0].waiting = 0;
-        
-        load_ghost(board);
-        
-        return 0;
+        return -1;
     }
 
     board->ghosts = calloc(board->n_ghosts, sizeof(ghost_t));
@@ -477,7 +395,6 @@ int load_level(board_t *board, int points, const char* level_dir) {
                     buf[n] = '\0';
                     char* line = buf;
                     int pos_x = 1, pos_y = 1;
-                    int found = 0;
                     while (line && *line) {
                         while (*line == ' ' || *line == '\t') line++;
                         if (*line != '#' && strncmp(line, "POS", 3) == 0) {
@@ -486,15 +403,11 @@ int load_level(board_t *board, int points, const char* level_dir) {
                                 board->ghosts[i].pos_y = pos_y;
                                 int idx = pos_y * board->width + pos_x;
                                 board->board[idx].content = 'M';
-                                found = 1;
                                 break;
                             }
                         }
                         line = strchr(line, '\n');
                         if (line) line++;
-                    }
-                    if (!found) {
-                        debug("Ghost %d: Failed to find POS command\n", i);
                     }
                 }
                 close(fd);
@@ -551,7 +464,6 @@ int load_level(board_t *board, int points, const char* level_dir) {
                 buf[n] = '\0';
                 char* line = buf;
                 int pos_x = 1, pos_y = 1;
-                int found = 0;
                 while (line && *line) {
                     while (*line == ' ' || *line == '\t') line++;
                     if (*line != '#' && strncmp(line, "POS", 3) == 0) {
@@ -563,15 +475,11 @@ int load_level(board_t *board, int points, const char* level_dir) {
                             board->pacmans[0].alive = 1;
                             board->pacmans[0].points = points;
                             board->pacmans[0].current_move = 0;
-                            found = 1;
                             break;
                         }
                     }
                     line = strchr(line, '\n');
                     if (line) line++;
-                }
-                if (!found) {
-                    debug("Pacman: Failed to find POS command\n");
                 }
             }
             close(fd);
@@ -610,7 +518,6 @@ void debug(const char * format, ...) {
 
 void print_board(board_t *board) {
     if (!board || !board->board) {
-        debug("[%d] Board is empty or not initialized.\n", getpid());
         return;
     }
 

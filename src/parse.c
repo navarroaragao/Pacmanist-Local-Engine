@@ -70,7 +70,6 @@ static inline int process_command_line(const char* line, command_t* moves, int m
 int parse_pacman_ghost_file(const char* filename, command_t* moves, int* n_moves, int* passo) {
     int fd = open(filename, O_RDONLY); 
     if (fd == -1) {
-        debug("Failed to open behavior file: %s\n", filename);
         return -1;
     }
 
@@ -92,10 +91,8 @@ int parse_pacman_ghost_file(const char* filename, command_t* moves, int* n_moves
                         if (sscanf(line_buffer, "PASSO %d", passo) != 1) {
                             *passo = 0;
                         }
-                        debug("Read PASSO: %d from file: %s\n", *passo, filename);
                         has_passo = 1;
                     } else if (strncmp(line_buffer, "POS", 3) == 0 && !has_pos) {
-                        debug("Found POS line in file: %s\n", filename);
                         has_pos = 1;
                     } else {
                         move_count = process_command_line(line_buffer, moves, move_count, has_passo, has_pos);
@@ -125,7 +122,6 @@ int parse_level_file(board_t* board, const char* level_dir) {
 
     int fd = open(filepath, O_RDONLY);
     if (fd == -1) {
-        debug("Failed to open level file: %s\n", filepath);
         return -1;
     }
 
